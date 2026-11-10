@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="sea" cx="50%" cy="40%" r="70%">
+      <stop offset="0" stop-color="#2fa6d6"/>
+      <stop offset="1" stop-color="#0b3d5c"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#sea)"/>
+  <ellipse cx="256" cy="380" rx="200" ry="70" fill="#e9d39b"/>
+  <ellipse cx="256" cy="365" rx="170" ry="52" fill="#6cbf5a"/>
+  <path d="M196 370 L192 210 Q196 140 256 132 Q316 140 320 210 L316 370 Z" fill="#6f685c"/>
+  <path d="M212 370 L208 214 Q212 156 256 150 L262 370 Z" fill="#857d6f"/>
+  <rect x="204" y="218" width="104" height="18" fill="#4a443b"/>
+  <rect x="248" y="236" width="18" height="60" fill="#4a443b"/>
+  <rect x="222" y="322" width="70" height="12" fill="#4a443b"/>
+  <rect x="206" y="110" width="100" height="30" rx="12" fill="#c0412d"/>
+</svg>

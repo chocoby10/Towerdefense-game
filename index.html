@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b3d5c" />
+  <meta name="description" content="Inselwächter – verteidige das Heiligtum deiner Insel in diesem Tower-Defense-Spiel." />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <title>Inselwächter</title>
+</head>
+<body>
+  <div id="app">
+    <!-- Hauptmenü -->
+    <section id="screen-menu" class="screen active">
+      <div class="menu-card">
+        <div class="logo">
+          <span class="logo-sub">Tower Defense</span>
+          <h1>Inselwächter</h1>
+        </div>
+        <button class="btn btn-primary btn-big" data-action="levels">Spielen</button>
+        <button class="btn" data-action="howto">Anleitung</button>
+        <button class="btn" data-action="settings">Einstellungen</button>
+      </div>
+    </section>
+
+    <!-- Levelauswahl -->
+    <section id="screen-levels" class="screen">
+      <header class="screen-head">
+        <button class="btn btn-icon" data-action="menu" aria-label="Zurück">←</button>
+        <h2>Wähle eine Insel</h2>
+        <span id="total-stars" class="pill"></span>
+      </header>
+      <div id="level-grid"></div>
+    </section>
+
+    <!-- Spiel -->
+    <section id="screen-game" class="screen">
+      <header id="hud">
+        <div class="hud-stats">
+          <span class="pill" title="Leben"><b>♥</b> <span id="hud-lives">20</span></span>
+          <span class="pill coins" title="Muscheln (Währung)"><b>◉</b> <span id="hud-coins">0</span></span>
+          <span class="pill" title="Welle">Welle <span id="hud-wave">0/10</span></span>
+        </div>
+        <div class="hud-actions">
+          <button id="btn-wave" class="btn btn-primary">Welle starten</button>
+          <button id="btn-speed" class="btn btn-icon" aria-label="Geschwindigkeit">1×</button>
+          <button id="btn-pause" class="btn btn-icon" aria-label="Pause">❚❚</button>
+        </div>
+      </header>
+      <div id="stage">
+        <canvas id="cv"></canvas>
+        <div id="wave-preview"></div>
+        <div id="tower-panel" hidden></div>
+        <div id="toasts"></div>
+        <div id="flash"></div>
+      </div>
+      <footer id="tower-bar"></footer>
+    </section>
+
+    <div id="modal" hidden>
+      <div class="modal-card" id="modal-card"></div>
+    </div>
+
+    <div id="rotate-hint">
+      <div>⟳</div>
+      <p>Bitte drehe dein Gerät ins Querformat.</p>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
