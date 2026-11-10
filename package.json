@@ -14,7 +14,8 @@
     "android:add": "cap add android",
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
-    "test:browser": "node scripts/test-browser.mjs"
+    "test:browser": "node scripts/test-browser.mjs",
+    "sim:waves": "node scripts/wave-report.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",

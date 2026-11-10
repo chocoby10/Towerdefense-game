@@ -229,6 +229,7 @@ export class Game {
 
   private spawners: Spawner[] = [];
   private hpScale = 1;
+  private bossScale = 1;
   private bonusWave = 0;
   /** Letzter sicherer Speicherpunkt (zwischen zwei Wellen) */
   checkpoint: RunSnapshot | null = null;
@@ -575,6 +576,7 @@ export class Game {
     const w = buildWave(this.level, this.levelIndex, this.wave, this.endless);
     this.wave++;
     this.hpScale = w.hpScale * this.mods.hp;
+    this.bossScale = w.bossScale * this.mods.hp;
     this.spawners = w.groups.map((g) => ({ g, spawned: 0, t: 0 }));
     this.countdown = -1;
     this.sfx('wave');
@@ -589,7 +591,8 @@ export class Game {
 
   private spawn(type: EnemyId): void {
     const path = this.paths[this.spawnToggle++ % this.paths.length];
-    const e = new Enemy(this.nextId++, ENEMIES[type], path, this.hpScale);
+    const def = ENEMIES[type];
+    const e = new Enemy(this.nextId++, def, path, def.boss ? this.bossScale : this.hpScale);
     this.enemies.push(e);
     if (e.def.boss) {
       this.addShake(8);

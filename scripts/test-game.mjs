@@ -5,14 +5,14 @@ import assert from 'node:assert/strict';
 
 const r = await build({
   stdin: {
-    contents: "export * from './src/game/game.ts'; export * from './src/game/storage.ts'; export * from './src/game/meta.ts'; export * from './src/game/data.ts';",
+    contents: "export * from './src/game/game.ts'; export * from './src/game/storage.ts'; export * from './src/game/meta.ts'; export * from './src/game/data.ts'; export * from './src/game/waves.ts';",
     resolveDir: process.cwd(), loader: 'ts',
   },
   bundle: true, format: 'esm', platform: 'node', write: false, logLevel: 'error',
 });
 const mem = new Map();
 globalThis.localStorage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) };
-const { Game, Enemy, cleanRun, buildMods, TOWERS, ENEMIES, LEVELS } = await import('data:text/javascript;base64,' + Buffer.from(r.outputFiles[0].text).toString('base64'));
+const { Game, Enemy, cleanRun, buildMods, TOWERS, ENEMIES, LEVELS, waveHp } = await import('data:text/javascript;base64,' + Buffer.from(r.outputFiles[0].text).toString('base64'));
 
 const mods = buildMods(1, {});
 const test = (name, fn) => { fn(); console.log('✓', name); };
@@ -179,6 +179,16 @@ test('Herausforderung im Spielstand nur auf Normal gültig', () => {
   assert.equal(cleanRun({ v: 1, level: 0, difficulty: 0, challenge: true }).challenge, false);
   assert.equal(cleanRun({ v: 1, level: 0, difficulty: 1, endless: true, challenge: true }).challenge, false);
   assert.equal(cleanRun({ v: 1, level: 0, difficulty: 1, challenge: true }).challenge, true);
+});
+
+test('Wellen werden auf jeder Insel stetig stärker (keine Ausreißer)', () => {
+  for (let L = 0; L < LEVELS.length; L++) {
+    const hp = Array.from({ length: LEVELS[L].waves }, (_, i) => waveHp(L, i));
+    for (let i = 1; i < hp.length; i++) {
+      assert.ok(hp[i] > hp[i - 1], `Insel ${L + 1}: Welle ${i + 1} (${Math.round(hp[i])}) ist nicht stärker als Welle ${i} (${Math.round(hp[i - 1])})`);
+      assert.ok(hp[i] < hp[i - 1] * 2.2, `Insel ${L + 1}: Sprung von Welle ${i} auf ${i + 1} ist zu groß`);
+    }
+  }
 });
 
 console.log('Alle Spiellogik-Tests bestanden.');

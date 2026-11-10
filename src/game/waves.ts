@@ -1,4 +1,4 @@
-import type { EnemyId, LevelDef } from './data';
+import { ENEMIES, LEVELS, type EnemyId, type LevelDef } from './data';
 
 export interface SpawnGroup {
   type: EnemyId;
@@ -11,12 +11,66 @@ export interface SpawnGroup {
 
 export interface Wave {
   groups: SpawnGroup[];
+  /** HP-Faktor für normale Gegner */
   hpScale: number;
+  /** HP-Faktor für Bosse (Kraken) */
+  bossScale: number;
+}
+
+/** Bisherige HP-Kurve pro Gegner; gilt weiter für Bosse und den Endlosmodus */
+function legacyScale(level: LevelDef, i: number): number {
+  return level.hpMult * (1 + 0.21 * i + 0.022 * i * i);
+}
+
+/** Summe der Grund-HP aller normalen Gegner einer Welle (ohne Bosse) */
+function rawHp(groups: SpawnGroup[]): number {
+  let hp = 0;
+  for (const g of groups) if (!ENEMIES[g.type].boss) hp += ENEMIES[g.type].hp * g.count;
+  return hp;
+}
+
+/** Form der Schwierigkeitskurve: stetig steigend, sanfter Einstieg, leichte Spitze bei Zwischenbossen */
+function shape(i: number): number {
+  const ramp = [0.5, 0.62, 0.75, 0.88][i] ?? 1;
+  const mini = i % 5 === 4 ? 1.1 : 1;
+  return (1 + 0.25 * i + 0.18 * i * i) * ramp * mini;
+}
+
+const budgetCache = new Map<LevelDef, number>();
+
+/**
+ * Faktor A einer Insel: so gewählt, dass die Summe aller Wellen-Budgets genau der
+ * bisherigen Gesamtstärke der Insel entspricht. Die Insel bleibt also insgesamt gleich
+ * schwer – nur gleichmäßig verteilt statt mit Ausreißern.
+ */
+function islandFactor(level: LevelDef, levelIndex: number): number {
+  let a = budgetCache.get(level);
+  if (a === undefined) {
+    let total = 0, shapes = 0;
+    for (let i = 0; i < level.waves; i++) {
+      total += rawHp(composeWave(level, levelIndex, i, false)) * legacyScale(level, i);
+      shapes += shape(i);
+    }
+    a = total / shapes;
+    budgetCache.set(level, a);
+  }
+  return a;
 }
 
 /** Erzeugt Welle i (0-basiert) für ein Level. Deterministisch, damit Level reproduzierbar sind. */
 /** endless: Wellen gehen unbegrenzt weiter, alle 10 Wellen kommt ein Kraken. */
 export function buildWave(level: LevelDef, levelIndex: number, i: number, endless = false): Wave {
+  const groups = composeWave(level, levelIndex, i, endless);
+  const legacy = legacyScale(level, i);
+  // Endlosmodus: bisherige Kurve, damit Rekorde vergleichbar bleiben
+  if (endless || i >= level.waves) return { groups, hpScale: legacy, bossScale: legacy };
+  const raw = rawHp(groups);
+  const hpScale = raw > 0 ? (islandFactor(level, levelIndex) * shape(i)) / raw : legacy;
+  return { groups, hpScale, bossScale: legacy };
+}
+
+/** Zusammensetzung einer Welle (welche Gegner, wie viele, wann) */
+function composeWave(level: LevelDef, levelIndex: number, i: number, endless: boolean): SpawnGroup[] {
   const last = endless ? i % 10 === 9 : i === level.waves - 1;
   const t = i + Math.floor(levelIndex * 1.5); // effektive Stufe
   const g: SpawnGroup[] = [];
@@ -40,6 +94,12 @@ export function buildWave(level: LevelDef, levelIndex: number, i: number, endles
     g.push({ type: 'turtle', count: 2 + Math.floor(t / 4), interval: 1.6, delay: 14 });
   }
 
-  const hpScale = level.hpMult * (1 + 0.21 * i + 0.022 * i * i);
-  return { groups: g, hpScale };
+  return g;
+}
+
+/** Nur für Tests/Analyse: Gesamt-HP der normalen Gegner einer Welle */
+export function waveHp(levelIndex: number, i: number): number {
+  const lv = LEVELS[levelIndex];
+  const w = buildWave(lv, levelIndex, i);
+  return rawHp(w.groups) * w.hpScale;
 }
