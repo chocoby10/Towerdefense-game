@@ -231,7 +231,7 @@ export const LEVELS: LevelDef[] = [
   {
     name: 'Riffspirale', subtitle: 'Sie kommen vom Meer und winden sich ins Inselinnere.',
     paths: [[[18, 1], [2, 1], [2, 8], [15, 8], [15, 4], [6, 4], [6, 6], [11, 6]]],
-    waves: 16, hpMult: 2.4, coins: 310, lives: 20, seed: 41, theme: REEF,
+    waves: 16, hpMult: 1.8, coins: 350, lives: 20, seed: 41, theme: REEF,
   },
   {
     name: 'Sturmküste', subtitle: 'Die letzte Schlacht: Angriff von Norden und Süden.',
