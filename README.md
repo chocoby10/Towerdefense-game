@@ -42,6 +42,8 @@ Auf dem Handy: Seite öffnen, im Browser-Menü „Zum Startbildschirm hinzufüge
 - Zielwahl pro Turm, Verbessern/Verkaufen, Wellenvorschau, Früh-Bonus, 1×/2×/3×-Tempo, Pause
 - Touch-Bedienung (Tippen = Vorschau, nochmal tippen = bauen), Maus und Tastatur
 - Pausiert automatisch, wenn die App in den Hintergrund geht
+- Speichert laufende Partien vor jeder Welle – nach einem Abbruch geht es mit „Fortsetzen“ weiter
+- Offline spielbar nach dem ersten Besuch (Service Worker), installierbar über „Zum Startbildschirm hinzufügen“
 - Fortschritt und Einstellungen werden lokal gespeichert
 
 Vollbild: Auf Handys wechselt das Spiel beim Tippen auf „Spielen“ automatisch in den Vollbildmodus; zusätzlich gibt es den ⛶-Knopf oben rechts (nicht auf iPhones – dort „Zum Home-Bildschirm“ nutzen).
@@ -51,8 +53,11 @@ Tastatur: `1`–`5` Turm · `Q`/`E` Fähigkeiten · `Leertaste` Welle · `P` Pau
 ## Tests
 
 ```bash
-npm test   # prüft, dass kaputte oder manipulierte Spielstände sicher geladen werden
+npm test               # Spiellogik, Speicherpunkte, Schutz gegen kaputte/manipulierte Spielstände
+npm run build && npm run test:browser   # Layout auf 9 Bildschirmgrößen, Fortsetzen, Offline-Start
 ```
+
+Bei jedem Pull Request laufen alle Tests automatisch auf GitHub (Workflow „Prüfen“). Vor jeder Veröffentlichung laufen Build und `npm test`.
 
 ## Balance-Test
 

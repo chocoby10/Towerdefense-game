@@ -10,10 +10,11 @@
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
     "sim": "node scripts/simulate.mjs",
-    "test": "node scripts/test-storage.mjs",
+    "test": "node scripts/test-storage.mjs && node scripts/test-game.mjs",
     "android:add": "cap add android",
     "android:sync": "npm run build && cap sync android",
-    "android:open": "cap open android"
+    "android:open": "cap open android",
+    "test:browser": "node scripts/test-browser.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.0",
+    "playwright": "1.63.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.0"
   }

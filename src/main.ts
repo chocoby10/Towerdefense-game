@@ -5,7 +5,7 @@ import { Enemy, Game, Path, scaleStats, type Tower } from './game/game';
 import { buildMods, DIFFICULTIES, PERKS, perkSpent, type Difficulty, type PerkId } from './game/meta';
 import { buildBackground, drawEnemyIcon, drawTower, Renderer } from './game/renderer';
 import { Audio } from './game/audio';
-import { bestStars, load, save, totalStars } from './game/storage';
+import { bestStars, clearRun, load, loadRun, save, saveRun, totalStars } from './game/storage';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -63,6 +63,20 @@ function show(id: 'menu' | 'levels' | 'game'): void {
   $(`#screen-${id}`).classList.add('active');
   if (id === 'levels') renderLevels();
   if (id === 'game') requestAnimationFrame(resize);
+  if (id === 'menu') updateMenu();
+}
+
+/** Zeigt "Fortsetzen", wenn eine unterbrochene Partie gespeichert ist */
+function updateMenu(): void {
+  const run = loadRun();
+  const btn = $<HTMLButtonElement>('#btn-resume');
+  btn.hidden = !run;
+  $('#btn-play').classList.toggle('btn-primary', !run);
+  $('#btn-play').classList.toggle('btn-big', !run);
+  if (run) {
+    const mode = run.endless ? 'Endlos' : DIFFICULTIES[run.difficulty].name;
+    btn.innerHTML = `Fortsetzen<small>${run.level + 1}. ${LEVELS[run.level].name} · ${mode} · vor Welle ${run.wave + 1}</small>`;
+  }
 }
 
 document.addEventListener('pointerdown', () => audio.unlock(), { capture: true });
@@ -79,6 +93,7 @@ document.addEventListener('click', (ev) => {
   else if (a === 'menu') show('menu');
   else if (a === 'howto') openHowTo();
   else if (a === 'settings') openSettings();
+  else if (a === 'resume') resumeRun();
   else if (a === 'shop') openShop();
 });
 
@@ -139,7 +154,8 @@ function openLevelMenu(i: number): void {
       <button class="btn" id="lm-back">Zurück</button>
     </div>
     <p class="hint">Leicht: Gegner −25 % Leben, mehr Startgeld · Schwer: Gegner +30 % Leben, weniger Startgeld.<br>Sterne zählen für jede Schwierigkeit einzeln.</p>
-  `);
+    ${loadRun() ? '<p class="hint warn">Achtung: Deine unterbrochene Partie wird beim Start einer neuen Insel verworfen.</p>' : ''}
+  `, 'level-menu');
   modalCard.querySelectorAll<HTMLButtonElement>('[data-diff]').forEach((b) => {
     b.onclick = () => { closeModal(); startLevel(i, { difficulty: Number(b.dataset.diff) as Difficulty, endless: false }); };
   });
@@ -342,7 +358,27 @@ let lastStart: StartOpts = { difficulty: 1, endless: false };
 
 function startLevel(i: number, opts: StartOpts = lastStart): void {
   lastStart = opts;
-  game = new Game(i, { ...opts, mods: buildMods(opts.difficulty, data.perks) });
+  clearRun();
+  enterGame(new Game(i, { ...opts, mods: buildMods(opts.difficulty, data.perks) }));
+  if (i === 0 && bestStars(data, 0) === 0) {
+    toast('Willkommen, Inselwächter!', 'Wähle in der Turmleiste einen Turm und baue ihn neben den Weg. Dann starte die erste Welle.');
+  } else if (opts.endless) {
+    toast('Endlosmodus', 'Die Wellen hören nicht auf und werden immer stärker. Wie weit kommst du?');
+  }
+}
+
+/** Setzt eine unterbrochene Partie am letzten Speicherpunkt fort */
+function resumeRun(): void {
+  const run = loadRun();
+  if (!run) { updateMenu(); return; }
+  if (isTouch && !isStandalone) void enterFullscreen();
+  lastStart = { difficulty: run.difficulty, endless: run.endless };
+  enterGame(Game.restore(run, buildMods(run.difficulty, data.perks)));
+  toast('Partie fortgesetzt', `Weiter geht's vor Welle ${run.wave + 1}. Deine Türme stehen noch.`);
+}
+
+function enterGame(g: Game): void {
+  game = g;
   renderer = new Renderer(game);
   touchPending = null;
   panel.hidden = true;
@@ -350,11 +386,6 @@ function startLevel(i: number, opts: StartOpts = lastStart): void {
   buildTowerBar();
   buildAbilityBar();
   show('game');
-  if (i === 0 && bestStars(data, 0) === 0) {
-    toast('Willkommen, Inselwächter!', 'Wähle in der Turmleiste einen Turm und baue ihn neben den Weg. Dann starte die erste Welle.');
-  } else if (opts.endless) {
-    toast('Endlosmodus', 'Die Wellen hören nicht auf und werden immer stärker. Wie weit kommst du?');
-  }
 }
 
 function quitGame(): void {
@@ -757,8 +788,9 @@ function frame(now: number): void {
         case 'sfx': audio.play(ev.name); break;
         case 'toast': toast(ev.title, ev.text); break;
         case 'leak': flashDamage(); break;
-        case 'won': setTimeout(() => openResult(true), 900); break;
-        case 'lost': setTimeout(() => openResult(false), 900); break;
+        case 'won': clearRun(); setTimeout(() => openResult(true), 900); break;
+        case 'lost': clearRun(); setTimeout(() => openResult(false), 900); break;
+        case 'checkpoint': if (game.checkpoint) saveRun(game.checkpoint); break;
       }
     }
     game.events.length = 0;
@@ -781,6 +813,15 @@ if (import.meta.env.DEV) (window as unknown as { __game: () => Game | null }).__
   mc.width = bg.width / 2;
   mc.height = bg.height / 2;
   mc.getContext('2d')!.drawImage(bg, 0, 0, mc.width, mc.height);
+}
+
+// Offline-Fähigkeit: Service Worker nur im veröffentlichten Web-Build registrieren
+// (nicht im Entwicklungsmodus und nicht in der Android-App, die ihre Dateien schon lokal hat)
+const isNativeApp = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+if (import.meta.env.PROD && 'serviceWorker' in navigator && !isNativeApp) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => { /* ohne Offline-Modus weiterspielen */ });
+  });
 }
 
 show('menu');

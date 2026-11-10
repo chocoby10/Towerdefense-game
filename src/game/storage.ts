@@ -1,4 +1,7 @@
-import { LEVELS } from './data';
+import { COLS, ROWS } from './config';
+import { ENEMIES, LEVELS, TARGET_MODES, TOWERS, type EnemyId, type TargetMode, type TowerId } from './data';
+import type { RunSnapshot } from './game';
+import type { Difficulty } from './meta';
 import { PERKS, perkSpent, type Perks } from './meta';
 
 export interface Settings {
@@ -105,4 +108,69 @@ export function bestStars(d: SaveData, level: number): number {
 /** Gesammelte Sterne insgesamt (jede Schwierigkeit zählt einzeln) */
 export function totalStars(d: SaveData): number {
   return d.stars.reduce((a, r) => a + r.reduce((x, y) => x + y, 0), 0);
+}
+
+// ======================= Laufende Partie =======================
+
+const RUN_KEY = 'inselwaechter.run.v1';
+const MAX_COINS = 10_000_000;
+
+/** Prüft einen gespeicherten Partie-Stand vollständig; bei Unstimmigkeiten null. */
+export function cleanRun(v: unknown): RunSnapshot | null {
+  if (!v || typeof v !== 'object') return null;
+  const s = v as Record<string, unknown>;
+  if (s.v !== 1) return null;
+  const level = int(s.level, LEVELS.length - 1);
+  if (Number(s.level) !== level) return null;
+  const difficulty = int(s.difficulty, 2) as Difficulty;
+  const endless = s.endless === true;
+  const towers: RunSnapshot['towers'] = [];
+  const used = new Set<string>();
+  if (Array.isArray(s.towers)) {
+    for (const raw of s.towers.slice(0, COLS * ROWS)) {
+      if (!raw || typeof raw !== 'object') continue;
+      const t = raw as Record<string, unknown>;
+      if (typeof t.id !== 'string' || !Object.hasOwn(TOWERS, t.id)) continue;
+      const id = t.id as TowerId;
+      const c = int(t.c, COLS - 1), r = int(t.r, ROWS - 1);
+      if (used.has(`${c},${r}`)) continue;
+      used.add(`${c},${r}`);
+      const lvl = int(t.level, 2);
+      const branch = lvl >= 2 ? int(t.branch, 1) : -1;
+      const mode = TARGET_MODES.includes(t.mode as TargetMode) ? (t.mode as TargetMode) : 'first';
+      towers.push({ id, c, r, level: lvl, branch, mode, invested: int(t.invested, MAX_COINS), kills: int(t.kills, MAX_COINS) });
+    }
+  }
+  const cd = (s.cooldowns ?? {}) as Record<string, unknown>;
+  const seen = Array.isArray(s.seen) ? s.seen.filter((e): e is EnemyId => typeof e === 'string' && Object.hasOwn(ENEMIES, e)) : [];
+  return {
+    v: 1,
+    level,
+    difficulty,
+    endless,
+    coins: int(s.coins, MAX_COINS),
+    lives: Math.max(1, int(s.lives, 100)),
+    wave: int(s.wave, endless ? MAX_ENDLESS : LEVELS[level].waves),
+    kills: int(s.kills, MAX_COINS),
+    cooldowns: { meteor: int(cd.meteor, 600), flood: int(cd.flood, 600) },
+    towers,
+    seen,
+  };
+}
+
+export function loadRun(): RunSnapshot | null {
+  try {
+    const raw = localStorage.getItem(RUN_KEY);
+    return raw ? cleanRun(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveRun(run: RunSnapshot): void {
+  try { localStorage.setItem(RUN_KEY, JSON.stringify(run)); } catch { /* ignorieren */ }
+}
+
+export function clearRun(): void {
+  try { localStorage.removeItem(RUN_KEY); } catch { /* ignorieren */ }
 }

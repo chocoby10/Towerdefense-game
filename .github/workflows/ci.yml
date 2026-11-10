@@ -1,0 +1,31 @@
+name: Prüfen
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typprüfung und Build
+        run: npm run build
+      - name: Logik- und Speicherstand-Tests
+        run: npm test
+      - name: Browser installieren
+        run: npx playwright install --with-deps chromium
+      - name: Browser-Tests (Layout, Fortsetzen, Offline)
+        run: npm run test:browser

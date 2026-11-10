@@ -138,7 +138,25 @@ export type GameEvent =
   | { type: 'toast'; title: string; text: string }
   | { type: 'leak' }
   | { type: 'won' }
-  | { type: 'lost' };
+  | { type: 'lost' }
+  /** Ein sicherer Speicherpunkt liegt in game.checkpoint bereit */
+  | { type: 'checkpoint' };
+
+/** Gespeicherter Spielstand einer laufenden Partie (immer zwischen zwei Wellen) */
+export interface RunSnapshot {
+  v: 1;
+  level: number;
+  difficulty: Difficulty;
+  endless: boolean;
+  coins: number;
+  lives: number;
+  /** Anzahl bereits gestarteter Wellen */
+  wave: number;
+  kills: number;
+  cooldowns: Record<AbilityId, number>;
+  towers: { id: TowerId; c: number; r: number; level: number; branch: number; mode: TargetMode; invested: number; kills: number }[];
+  seen: EnemyId[];
+}
 
 export interface Decor { c: number; r: number; kind: 'palm' | 'rock' | 'bush' }
 
@@ -206,6 +224,8 @@ export class Game {
   private spawners: Spawner[] = [];
   private hpScale = 1;
   private bonusWave = 0;
+  /** Letzter sicherer Speicherpunkt (zwischen zwei Wellen) */
+  checkpoint: RunSnapshot | null = null;
   private nextId = 1;
   private spawnToggle = 0;
   private seen = new Set<EnemyId>();
@@ -254,6 +274,60 @@ export class Game {
         this.blocked.add(k);
       }
     }
+  }
+
+  // ---------- Speichern / Fortsetzen ----------
+
+  snapshot(): RunSnapshot {
+    return {
+      v: 1,
+      level: this.levelIndex,
+      difficulty: this.difficulty,
+      endless: this.endless,
+      coins: this.coins,
+      lives: this.lives,
+      wave: this.wave,
+      kills: this.kills,
+      cooldowns: { ...this.cooldowns },
+      towers: this.towers.map((t) => ({ id: t.def.id, c: t.c, r: t.r, level: t.level, branch: t.branch, mode: t.mode, invested: t.invested, kills: t.kills })),
+      seen: [...this.seen],
+    };
+  }
+
+  /** Stellt eine Partie wieder her. Ungültige Türme (z. B. auf dem Weg) werden übersprungen. */
+  static restore(s: RunSnapshot, mods: Mods): Game {
+    const g = new Game(s.level, { difficulty: s.difficulty, endless: s.endless, mods });
+    g.coins = s.coins;
+    g.lives = Math.min(s.lives, g.maxLives);
+    g.wave = Math.min(s.wave, g.totalWaves - 1);
+    g.bonusWave = g.wave;
+    g.kills = s.kills;
+    g.cooldowns = { ...s.cooldowns };
+    for (const id of s.seen) g.seen.add(id);
+    for (const t of s.towers) {
+      if (!g.canPlace(t.c, t.r)) continue;
+      const tw = new Tower(TOWERS[t.id], t.c, t.r, mods);
+      tw.level = t.level;
+      tw.branch = t.level >= 2 ? t.branch : -1;
+      tw.mode = t.mode;
+      tw.invested = t.invested;
+      tw.kills = t.kills;
+      tw.refresh();
+      g.towers.push(tw);
+      g.towerMap.set(key(t.c, t.r), tw);
+    }
+    g.checkpoint = g.snapshot();
+    return g;
+  }
+
+  /** Speicherpunkt nur, wenn keine Gegner unterwegs sind (sonst wären sie beim Fortsetzen weg) */
+  private checkpointIfCalm(): void {
+    if (this.state === 'playing' && this.enemies.length === 0 && this.spawningDone()) this.saveCheckpoint();
+  }
+
+  private saveCheckpoint(): void {
+    this.checkpoint = this.snapshot();
+    this.events.push({ type: 'checkpoint' });
   }
 
   // ---------- Abfragen ----------
@@ -322,6 +396,7 @@ export class Game {
     this.ring(t.x, t.y, 10, 40, 'rgba(255,255,255,0.8)', 0.35, 3);
     this.dust(t.x, t.y + 14, 10);
     this.sfx('build');
+    this.checkpointIfCalm();
     return true;
   }
 
@@ -338,6 +413,7 @@ export class Game {
     this.ring(t.x, t.y, 12, 50, 'rgba(255,215,90,0.9)', 0.45, 4);
     for (let i = 0; i < 14; i++) this.particle(t.x, t.y, '#ffd34d', 160, 3, 0.6, -60);
     this.sfx('upgrade');
+    this.checkpointIfCalm();
     return true;
   }
 
@@ -381,6 +457,7 @@ export class Game {
     this.text(t.x, t.y - 20, `+${t.sellValue}`, '#ffd34d', 16);
     this.dust(t.x, t.y, 14);
     this.sfx('sell');
+    this.checkpointIfCalm();
   }
 
   // ---------- Simulation ----------
@@ -456,6 +533,7 @@ export class Game {
           this.coins += bonus;
           this.text(this.goal.x, this.goal.y - 40, `Welle geschafft! +${bonus}`, '#ffd34d', 18);
           this.sfx('coin');
+          this.saveCheckpoint();
         }
       }
       if (this.wave >= this.totalWaves) {
@@ -467,6 +545,9 @@ export class Game {
   }
 
   private startWave(): void {
+    // Stand direkt vor der neuen Welle sichern. Noch laufende Gegner der Vorwelle
+    // gehen beim Fortsetzen verloren – bewusst einfach gehalten.
+    this.saveCheckpoint();
     const w = buildWave(this.level, this.levelIndex, this.wave, this.endless);
     this.wave++;
     this.hpScale = w.hpScale * this.mods.hp;
