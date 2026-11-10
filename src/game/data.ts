@@ -240,7 +240,7 @@ export const LEVELS: LevelDef[] = [
   {
     name: 'Palmenstrand', subtitle: 'Die ersten Eindringlinge landen am Strand.',
     paths: [[[-1, 2], [4, 2], [4, 7], [9, 7], [9, 3], [14, 3], [14, 7], [16, 7]]],
-    waves: 10, hpMult: 0.9, coins: 190, lives: 20, seed: 11, theme: BEACH, challenge: { kind: 'maxTowers', n: 6 },
+    waves: 10, hpMult: 0.85, coins: 190, lives: 20, seed: 11, theme: BEACH, challenge: { kind: 'maxTowers', n: 6 },
   },
   {
     name: 'Vulkanhang', subtitle: 'Ein langer Serpentinenpfad den Berg hinauf.',
