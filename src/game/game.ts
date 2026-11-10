@@ -425,7 +425,7 @@ export class Game {
       if (this.bonusWave < this.wave) {
         this.bonusWave = this.wave;
         if (this.wave < this.totalWaves) {
-          const bonus = 15 + this.wave * 4;
+          const bonus = 10 + this.wave * 3;
           this.coins += bonus;
           this.text(this.goal.x, this.goal.y - 40, `Welle geschafft! +${bonus}`, '#ffd34d', 18);
           this.sfx('coin');
