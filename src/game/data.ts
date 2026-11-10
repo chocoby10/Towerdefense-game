@@ -213,12 +213,12 @@ export const LEVELS: LevelDef[] = [
   {
     name: 'Palmenstrand', subtitle: 'Die ersten Eindringlinge landen am Strand.',
     paths: [[[-1, 2], [4, 2], [4, 7], [9, 7], [9, 3], [14, 3], [14, 7], [16, 7]]],
-    waves: 10, hpMult: 0.9, coins: 220, lives: 20, seed: 11, theme: BEACH,
+    waves: 10, hpMult: 0.9, coins: 190, lives: 20, seed: 11, theme: BEACH,
   },
   {
     name: 'Vulkanhang', subtitle: 'Ein langer Serpentinenpfad den Berg hinauf.',
     paths: [[[-1, 5], [3, 5], [3, 1], [7, 1], [7, 8], [11, 8], [11, 2], [15, 2], [15, 6], [16, 6]]],
-    waves: 12, hpMult: 1.2, coins: 250, lives: 20, seed: 23, theme: VOLCANO,
+    waves: 12, hpMult: 1.2, coins: 230, lives: 20, seed: 23, theme: VOLCANO,
   },
   {
     name: 'Zwillingslagune', subtitle: 'Zwei Landungsstellen – teile deine Kräfte auf.',

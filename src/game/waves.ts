@@ -20,8 +20,8 @@ export function buildWave(level: LevelDef, levelIndex: number, i: number): Wave 
   const t = i + Math.floor(levelIndex * 1.5); // effektive Stufe
   const g: SpawnGroup[] = [];
 
-  g.push({ type: 'crab', count: 5 + Math.floor(t * 1.4), interval: 0.9, delay: 0 });
-  if (t >= 2) g.push({ type: 'gecko', count: 3 + Math.floor(t * 0.8), interval: 0.55, delay: 4 });
+  g.push({ type: 'crab', count: 7 + Math.floor(t * 1.5), interval: 0.7, delay: 0 });
+  if (t >= 1) g.push({ type: 'gecko', count: 2 + Math.floor(t * 0.9), interval: 0.55, delay: 4 });
   if (t >= 3 && i % 2 === 1) g.push({ type: 'pirate', count: 2 + Math.floor(t * 0.6), interval: 1.2, delay: 6 });
   if (t >= 4 && i % 3 !== 0) g.push({ type: 'gull', count: 2 + Math.floor(t * 0.55), interval: 0.9, delay: 8 });
   if (t >= 5 && i % 2 === 0) g.push({ type: 'turtle', count: 1 + Math.floor(t * 0.3), interval: 2.4, delay: 10 });

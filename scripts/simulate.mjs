@@ -1,4 +1,5 @@
 // Balance-Test: ein einfacher Bot spielt jedes Level headless durch.
+// "weit" = wie weit Gegner in den ersten 3 Wellen maximal kommen (Anteil des Weges) – Maß für den Anfangsdruck.
 // Aufruf: npm run sim
 import { build } from 'esbuild';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -28,7 +29,7 @@ function coverage(g, c, r, range) {
 }
 
 function play(levelIndex, skill, useAbilities = true) {
-  const g = new Game(levelIndex);
+  const g = new Game(levelIndex); let early = 0;
   const order = ['sling', 'sling', 'conch', 'spear', 'sling', 'fire', 'storm', 'spear', 'conch', 'fire', 'storm'];
   let oi = 0;
   const dt = 1 / 30;
@@ -69,13 +70,14 @@ function play(levelIndex, skill, useAbilities = true) {
       if (g.canCallWave() && (g.wave === 0 || g.countdown < 18 - 6)) g.callWave();
     }
     g.update(dt);
+    if (g.wave <= 3) for (const e of g.enemies) early = Math.max(early, e.dist / e.path.total);
     g.events.length = 0;
     t += dt;
   }
-  return { state: g.state, wave: g.wave, lives: g.lives, towers: g.towers.length };
+  return { early: Math.round(early * 100), state: g.state, wave: g.wave, lives: g.lives, towers: g.towers.length };
 }
 
 for (let i = 0; i < LEVELS.length; i++) {
   const res = [0.4, 0.7, 1.0].map((s) => play(i, s));
-  console.log(`Level ${i + 1} ${LEVELS[i].name.padEnd(16)} ` + res.map((r, k) => `skill${[0.4, 0.7, 1][k]}: ${r.state.padEnd(4)} W${r.wave} ♥${r.lives} T${r.towers}`).join(' | '));
+  console.log(`Level ${i + 1} ${LEVELS[i].name.padEnd(16)} ` + res.map((r, k) => `s${[0.4, 0.7, 1][k]}: weit${String(r.early).padStart(3)}% ${r.state.padEnd(4)} W${r.wave} ♥${r.lives} T${r.towers}`).join(' | '));
 }
