@@ -1,0 +1,13 @@
+{
+  "name": "Inselwächter",
+  "short_name": "Inselwächter",
+  "description": "Tower-Defense-Spiel: Verteidige das Heiligtum deiner Insel.",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0b3d5c",
+  "theme_color": "#0b3d5c",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
