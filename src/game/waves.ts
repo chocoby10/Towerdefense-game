@@ -33,7 +33,7 @@ export function buildWave(level: LevelDef, levelIndex: number, i: number, endles
   if (levelIndex >= 6 && i >= 2 && i % 3 !== 0) g.push({ type: 'eel', count: 1 + Math.floor(t * 0.12), interval: 2.5, delay: 9 });
 
   if (last) {
-    const krakens = endless ? 1 + Math.floor(i / 20) : levelIndex >= 4 ? 2 : 1;
+    const krakens = endless ? 1 + Math.floor(i / 20) : 1;
     g.push({ type: 'kraken', count: krakens, interval: 10, delay: 12 });
   } else if (i % 5 === 4) {
     // Zwischenboss-Welle
