@@ -570,3 +570,9 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif; }
 .menu-card > .btn { width: min(340px, 100%); align-self: center; }
 @keyframes drift { to { transform: scale(1.1) translate(-1.5%, -1%); } }
 .logo h1 { text-shadow: 0 4px 0 #9b5a2c, 0 10px 30px rgba(0, 0, 0, 0.55); }
+
+/* Niedriges Querformat (Handy quer): zweispaltiges Menü behält seine volle Breite */
+@media (orientation: landscape) and (max-height: 480px) {
+  .menu-card { width: min(760px, 92vw); overflow: visible; }
+  .menu-card > .btn { width: 100%; }
+}
