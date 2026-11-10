@@ -1,4 +1,5 @@
 // Balance-Test: ein einfacher Bot spielt jedes Level headless durch.
+// Aufruf: npm run sim [-- leicht|normal|schwer|endless]
 // "weit" = wie weit Gegner in den ersten 3 Wellen maximal kommen (Anteil des Weges) – Maß für den Anfangsdruck.
 // Aufruf: npm run sim
 import { build } from 'esbuild';
@@ -10,10 +11,10 @@ import { pathToFileURL } from 'node:url';
 const dir = mkdtempSync(join(tmpdir(), 'sim-'));
 const out = join(dir, 'game.mjs');
 await build({
-  stdin: { contents: "export * from './src/game/game.ts'; export * from './src/game/data.ts';", resolveDir: process.cwd(), loader: 'ts' },
+  stdin: { contents: "export * from './src/game/game.ts'; export * from './src/game/data.ts'; export * from './src/game/meta.ts';", resolveDir: process.cwd(), loader: 'ts' },
   bundle: true, format: 'esm', platform: 'node', outfile: out, logLevel: 'error',
 });
-const { Game, LEVELS, TOWERS } = await import(pathToFileURL(out).href);
+const { Game, LEVELS, TOWERS, buildMods } = await import(pathToFileURL(out).href);
 rmSync(dir, { recursive: true, force: true });
 
 const TILE = 64, COLS = 18, ROWS = 10;
@@ -28,13 +29,13 @@ function coverage(g, c, r, range) {
   return n;
 }
 
-function play(levelIndex, skill, useAbilities = true) {
-  const g = new Game(levelIndex); let early = 0;
+function play(levelIndex, skill, useAbilities = true, opts = {}) {
+  const g = new Game(levelIndex, { ...opts, mods: buildMods(opts.difficulty ?? 1, opts.perks ?? {}) }); let early = 0;
   const order = ['sling', 'sling', 'conch', 'spear', 'sling', 'fire', 'storm', 'spear', 'conch', 'fire', 'storm'];
   let oi = 0;
   const dt = 1 / 30;
   let t = 0;
-  while (g.state === 'playing' && t < 3600) {
+  while (g.state === 'playing' && t < (opts.endless ? 7200 : 3600)) {
     // Bot-Entscheidungen alle 0,5 s
     if (Math.round(t * 30) % 15 === 0) {
       const want = order[oi % order.length];
@@ -77,7 +78,16 @@ function play(levelIndex, skill, useAbilities = true) {
   return { early: Math.round(early * 100), state: g.state, wave: g.wave, lives: g.lives, towers: g.towers.length };
 }
 
-for (let i = 0; i < LEVELS.length; i++) {
-  const res = [0.4, 0.7, 1.0].map((s) => play(i, s));
-  console.log(`Level ${i + 1} ${LEVELS[i].name.padEnd(16)} ` + res.map((r, k) => `s${[0.4, 0.7, 1][k]}: weit${String(r.early).padStart(3)}% ${r.state.padEnd(4)} W${r.wave} ♥${r.lives} T${r.towers}`).join(' | '));
+const mode = process.argv[2] ?? 'normal';
+if (mode === 'endless') {
+  for (let i = 0; i < LEVELS.length; i++) {
+    const res = [0.7, 1.0].map((sk) => play(i, sk, true, { endless: true }));
+    console.log(`Endlos Level ${i + 1} ${LEVELS[i].name.padEnd(16)} ` + res.map((r) => `Welle ${r.wave}`).join(' | '));
+  }
+} else {
+  const difficulty = { leicht: 0, normal: 1, schwer: 2 }[mode] ?? 1;
+  for (let i = 0; i < LEVELS.length; i++) {
+    const res = [0.4, 0.7, 1.0].map((s) => play(i, s, true, { difficulty }));
+    console.log(`[${mode}] Level ${i + 1} ${LEVELS[i].name.padEnd(16)} ` + res.map((r, k) => `s${[0.4, 0.7, 1][k]}: weit${String(r.early).padStart(3)}% ${r.state.padEnd(4)} W${r.wave} ♥${r.lives} T${r.towers}`).join(' | '));
+  }
 }

@@ -1,4 +1,5 @@
-import { COLS, ROWS, TILE, WAVE_DELAY, EARLY_BONUS_PER_SEC, SELL_RATIO } from './config';
+import { COLS, ROWS, TILE, WAVE_DELAY, EARLY_BONUS_PER_SEC } from './config';
+import { DEFAULT_MODS, type Difficulty, type Mods } from './meta';
 import {
   ABILITIES, ENEMIES, LEVELS, TOWERS,
   type AbilityId, type EnemyDef, type EnemyId, type LevelDef, type TargetMode, type Tile, type TowerDef, type TowerId, type TowerLevel,
@@ -62,6 +63,11 @@ export class Enemy {
   get remaining(): number { return this.path.total - this.dist; }
 }
 
+/** Wendet Shop-Boni (Schaden, Reichweite) auf Turmwerte an */
+export function scaleStats(s: TowerLevel, mods: Mods): TowerLevel {
+  return { ...s, damage: Math.round(s.damage * mods.damage), range: Math.round(s.range * mods.range) };
+}
+
 export class Tower {
   level = 0;
   cd = 0;
@@ -74,7 +80,9 @@ export class Tower {
   readonly x: number;
   readonly y: number;
 
-  constructor(readonly def: TowerDef, readonly c: number, readonly r: number) {
+  private cached!: TowerLevel;
+
+  constructor(readonly def: TowerDef, readonly c: number, readonly r: number, readonly mods: Mods = DEFAULT_MODS) {
     this.x = (c + 0.5) * TILE;
     this.y = (r + 0.5) * TILE;
     this.invested = def.cost;
@@ -83,14 +91,22 @@ export class Tower {
   /** Gewählte Spezialisierung auf Stufe 3 (-1 = keine) */
   branch = -1;
 
+  /** Aktuelle Werte inkl. Shop-Boni (gecacht, da sehr oft abgefragt) */
   get stats(): TowerLevel {
-    return this.level >= 2 ? this.def.branches[this.branch].stats : this.def.levels[this.level];
+    if (!this.cached) this.refresh();
+    return this.cached;
+  }
+
+  /** Nach Stufenwechsel aufrufen */
+  refresh(): void {
+    const base = this.level >= 2 ? this.def.branches[this.branch].stats : this.def.levels[this.level];
+    this.cached = scaleStats(base, this.mods);
   }
   /** Kosten für die nächste normale Stufe; null, wenn als Nächstes eine Spezialisierung gewählt wird oder max. Stufe */
   get upgradeCost(): number | null { return this.level === 0 ? this.def.levels[0].upgradeCost ?? null : null; }
   get canSpecialize(): boolean { return this.level === 1; }
   get branchName(): string | null { return this.branch >= 0 ? this.def.branches[this.branch].name : null; }
-  get sellValue(): number { return Math.floor(this.invested * SELL_RATIO); }
+  get sellValue(): number { return Math.floor(this.invested * this.mods.sellRatio); }
 }
 
 export interface Projectile {
@@ -194,12 +210,19 @@ export class Game {
   private spawnToggle = 0;
   private seen = new Set<EnemyId>();
 
-  constructor(readonly levelIndex: number) {
+  readonly endless: boolean;
+  readonly difficulty: Difficulty;
+  readonly mods: Mods;
+
+  constructor(readonly levelIndex: number, opts: { difficulty?: Difficulty; endless?: boolean; mods?: Mods } = {}) {
+    this.endless = opts.endless ?? false;
+    this.difficulty = opts.difficulty ?? 1;
+    this.mods = opts.mods ?? DEFAULT_MODS;
     this.level = LEVELS[levelIndex];
     this.paths = this.level.paths.map((p) => new Path(p));
-    this.coins = this.level.coins;
-    this.lives = this.maxLives = this.level.lives;
-    this.totalWaves = this.level.waves;
+    this.coins = Math.round(this.level.coins * this.mods.coinsMult) + this.mods.coinsBonus;
+    this.lives = this.maxLives = this.level.lives + this.mods.lives;
+    this.totalWaves = this.endless ? Infinity : this.level.waves;
     const last = this.level.paths[0][this.level.paths[0].length - 1];
     this.goal = { x: (last[0] + 0.5) * TILE, y: (last[1] + 0.5) * TILE };
 
@@ -243,6 +266,9 @@ export class Game {
 
   towerAt(c: number, r: number): Tower | undefined { return this.towerMap.get(key(c, r)); }
 
+  /** Abklingzeit inkl. Shop-Bonus */
+  abilityMax(id: AbilityId): number { return ABILITIES[id].cooldown * this.mods.cooldown; }
+
   abilityReady(id: AbilityId): boolean {
     return this.state === 'playing' && this.wave > 0 && this.cooldowns[id] <= 0;
   }
@@ -258,7 +284,7 @@ export class Game {
   /** Vorschau der nächsten Welle (Gegnertypen und Anzahl) */
   nextWavePreview(): { type: EnemyId; count: number }[] {
     if (this.wave >= this.totalWaves) return [];
-    const w = buildWave(this.level, this.levelIndex, this.wave);
+    const w = buildWave(this.level, this.levelIndex, this.wave, this.endless);
     const m = new Map<EnemyId, number>();
     for (const g of w.groups) m.set(g.type, (m.get(g.type) ?? 0) + g.count);
     return [...m].map(([type, count]) => ({ type, count }));
@@ -289,7 +315,7 @@ export class Game {
       this.sfx('error');
       return false;
     }
-    const t = new Tower(def, c, r);
+    const t = new Tower(def, c, r, this.mods);
     this.towers.push(t);
     this.towerMap.set(key(c, r), t);
     this.coins -= def.cost;
@@ -308,6 +334,7 @@ export class Game {
     t.invested += cost;
     t.level++;
     if (t.level === 2) t.branch = branch!;
+    t.refresh();
     this.ring(t.x, t.y, 12, 50, 'rgba(255,215,90,0.9)', 0.45, 4);
     for (let i = 0; i < 14; i++) this.particle(t.x, t.y, '#ffd34d', 160, 3, 0.6, -60);
     this.sfx('upgrade');
@@ -316,7 +343,7 @@ export class Game {
 
   castMeteor(x: number, y: number): boolean {
     if (!this.abilityReady('meteor')) { this.sfx('error'); return false; }
-    this.cooldowns.meteor = ABILITIES.meteor.cooldown;
+    this.cooldowns.meteor = this.abilityMax('meteor');
     this.meteors.push({ x, y, t: METEOR_FALL, max: METEOR_FALL });
     this.aiming = null;
     this.sfx('meteor');
@@ -325,7 +352,7 @@ export class Game {
 
   castFlood(): boolean {
     if (!this.abilityReady('flood')) { this.sfx('error'); return false; }
-    this.cooldowns.flood = ABILITIES.flood.cooldown;
+    this.cooldowns.flood = this.abilityMax('flood');
     const dmg = 20 + this.wave * 5;
     for (const e of this.enemies) {
       if (!e.alive) continue;
@@ -440,9 +467,9 @@ export class Game {
   }
 
   private startWave(): void {
-    const w = buildWave(this.level, this.levelIndex, this.wave);
+    const w = buildWave(this.level, this.levelIndex, this.wave, this.endless);
     this.wave++;
-    this.hpScale = w.hpScale;
+    this.hpScale = w.hpScale * this.mods.hp;
     this.spawners = w.groups.map((g) => ({ g, spawned: 0, t: 0 }));
     this.countdown = -1;
     this.sfx('wave');

@@ -30,7 +30,10 @@ Auf dem Handy: Seite öffnen, im Browser-Menü „Zum Startbildschirm hinzufüge
 
 ## Inhalt
 
-- 5 Inseln (Level) mit 10–20 Wellen, Freischaltung nacheinander, 1–3 Sterne pro Insel
+- 5 Inseln (Level) mit 10–20 Wellen, Freischaltung nacheinander
+- Schwierigkeitsgrade Leicht/Normal/Schwer, je 1–3 Sterne (max. 45 Sterne)
+- Endlosmodus pro Insel mit Rekord (alle 10 Wellen ein Kraken)
+- Sterne-Shop mit dauerhaften Boni (Startkapital, Schaden, Reichweite, Abklingzeit, Leben, Verkaufswert)
 - 5 Türme mit je 3 Stufen: Schleuder, Muschelhorn (verlangsamt), Speer-Totem (durchschlägt Panzer), Feuerschale (Fläche + Brand), Sturmstein (Kettenblitz)
 - Spezialisierung auf Stufe 3: pro Turm zwei Zweige (z. B. Doppelschleuder oder Felsbrocken, Speerhagel oder Riesenspeer)
 - Aktive Fähigkeiten mit Abklingzeit: Vulkanbrocken (Flächenschaden an gewählter Stelle) und Flutwelle (spült Bodengegner zurück)
@@ -51,7 +54,7 @@ Tastatur: `1`–`5` Turm · `Q`/`E` Fähigkeiten · `Leertaste` Welle · `P` Pau
 npm run sim
 ```
 
-Ein einfacher Bot spielt jede Insel mit drei Spielstärken durch. Werte anpassen in `src/game/data.ts` (Türme, Gegner, Level) und `src/game/waves.ts` (Wellen).
+Ein einfacher Bot spielt jede Insel mit drei Spielstärken durch. Varianten: `npm run sim -- leicht`, `-- schwer`, `-- endless`. Werte anpassen in `src/game/data.ts` (Türme, Gegner, Level) und `src/game/waves.ts` (Wellen).
 
 ## Projektstruktur
 
