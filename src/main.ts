@@ -774,4 +774,13 @@ requestAnimationFrame(frame);
 // Nur im Entwicklungsmodus: Zugriff für automatisierte Tests
 if (import.meta.env.DEV) (window as unknown as { __game: () => Game | null }).__game = () => game;
 
+// Hauptmenü-Hintergrund: die erste Insel, leicht unscharf
+{
+  const bg = buildBackground(new Game(0));
+  const mc = $<HTMLCanvasElement>('#menu-bg');
+  mc.width = bg.width / 2;
+  mc.height = bg.height / 2;
+  mc.getContext('2d')!.drawImage(bg, 0, 0, mc.width, mc.height);
+}
+
 show('menu');

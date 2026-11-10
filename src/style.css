@@ -463,3 +463,110 @@ html, body {
 .pips { display: inline-flex; gap: 3px; vertical-align: middle; margin-left: 4px; }
 .pip { width: 9px; height: 9px; border-radius: 50%; background: #d9ccb0; }
 .pip.on { background: #e0a800; }
+
+/* =====================================================================
+   Moderner Look: Glas-Flächen, Meereshintergrund, feinere Buttons
+   ===================================================================== */
+:root {
+  --glass: rgba(12, 32, 48, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-hi: rgba(255, 255, 255, 0.08);
+}
+body { font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif; }
+
+/* Spielfeld schwimmt im Meer */
+#screen-game { background: radial-gradient(ellipse at 50% 45%, #1e8ab3 0%, #0f5577 55%, #082e45 100%); }
+#cv { border-radius: 18px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10), 0 18px 50px rgba(0, 20, 35, 0.55); }
+
+/* Glas-Pillen im HUD */
+#hud { background: none; }
+.pill {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+
+/* Buttons: sanfter Verlauf, weichere Kanten */
+.btn {
+  background: linear-gradient(180deg, #fbf2dc, #ead9b4);
+  border-radius: 14px;
+  box-shadow: 0 3px 0 #b49c6c, 0 8px 18px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.2px;
+}
+.btn-primary {
+  background: linear-gradient(180deg, #ffc56a, #f39a2c);
+  box-shadow: 0 3px 0 #b8691a, 0 8px 18px rgba(240, 140, 30, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.btn-danger {
+  background: linear-gradient(180deg, #ff9d8e, #e8644f);
+  box-shadow: 0 3px 0 #a8432f, 0 8px 18px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.btn:hover:not(:disabled) { filter: brightness(1.05); }
+
+/* Turmleiste als Glas-Karten */
+.tower-btn {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 6px 16px rgba(0, 0, 0, 0.25);
+  border-radius: 16px;
+  transition: transform 0.12s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.tower-btn:hover:not(.locked) { transform: translateY(-2px); }
+.tower-btn.active {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, rgba(255, 211, 77, 0.32), rgba(255, 211, 77, 0.1));
+  box-shadow: 0 0 0 2px rgba(255, 211, 77, 0.35), 0 8px 22px rgba(255, 190, 40, 0.25);
+}
+
+/* Panels und Hinweise */
+#tower-panel, #wave-preview, .toast {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+#tower-panel { border-radius: 18px; }
+.toast { border-left: 4px solid var(--gold); }
+
+/* Modals: weicher, mit Tiefe */
+#modal { background: rgba(4, 20, 32, 0.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.modal-card {
+  background: linear-gradient(180deg, #fffaf0, #f6ead0);
+  border-radius: 24px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), inset 0 1px 0 #fff;
+}
+
+/* Inselkarten */
+.level-card { border-radius: 18px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3); }
+.level-card:hover:not(:disabled) { transform: translateY(-4px); box-shadow: 0 16px 36px rgba(0, 0, 0, 0.38); }
+#screen-levels { background: radial-gradient(ellipse at 50% 0%, #1e8ab3, #0b3d5c 70%); }
+
+/* Hauptmenü: echte Insel als Hintergrund */
+#screen-menu { overflow: hidden; background: #0b3d5c; }
+#menu-bg {
+  position: absolute;
+  inset: -20px;
+  width: calc(100% + 40px);
+  height: calc(100% + 40px);
+  object-fit: cover;
+  filter: blur(3px) saturate(1.1);
+  transform: scale(1.04);
+  animation: drift 30s ease-in-out infinite alternate;
+}
+#screen-menu::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(5, 30, 45, 0.25), rgba(5, 25, 40, 0.75));
+  z-index: 1;
+}
+#menu-bg { z-index: 0; }
+.menu-card { position: relative; z-index: 2; width: min(460px, 92vw); }
+.menu-card > .btn { width: min(340px, 100%); align-self: center; }
+@keyframes drift { to { transform: scale(1.1) translate(-1.5%, -1%); } }
+.logo h1 { text-shadow: 0 4px 0 #9b5a2c, 0 10px 30px rgba(0, 0, 0, 0.55); }

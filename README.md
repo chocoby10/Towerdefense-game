@@ -48,6 +48,12 @@ Vollbild: Auf Handys wechselt das Spiel beim Tippen auf „Spielen“ automatisc
 
 Tastatur: `1`–`5` Turm · `Q`/`E` Fähigkeiten · `Leertaste` Welle · `P` Pause · `F` Tempo · `U` Verbessern · `S` Verkaufen · `Esc` Abbrechen · `Shift`+Klick baut mehrere Türme hintereinander
 
+## Tests
+
+```bash
+npm test   # prüft, dass kaputte oder manipulierte Spielstände sicher geladen werden
+```
+
 ## Balance-Test
 
 ```bash
