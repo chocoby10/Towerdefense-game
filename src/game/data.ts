@@ -168,25 +168,25 @@ export interface EnemyDef {
 }
 
 export const ENEMIES: Record<EnemyId, EnemyDef> = {
-  crab: { id: 'crab', name: 'Krabbe', hp: 38, speed: 52, armor: 0, reward: 5, size: 14, lives: 1,
+  crab: { id: 'crab', name: 'Krabbe', hp: 44, speed: 52, armor: 0, reward: 5, size: 14, lives: 1,
     hint: 'Krabben sind langsam, kommen aber in großen Gruppen.' },
-  gecko: { id: 'gecko', name: 'Gecko', hp: 26, speed: 100, armor: 0, reward: 4, size: 11, lives: 1,
+  gecko: { id: 'gecko', name: 'Gecko', hp: 30, speed: 100, armor: 0, reward: 4, size: 11, lives: 1,
     hint: 'Geckos sind sehr schnell – Muschelhörner bremsen sie aus.' },
-  pirate: { id: 'pirate', name: 'Pirat', hp: 85, speed: 48, armor: 1, reward: 8, size: 15, lives: 1,
+  pirate: { id: 'pirate', name: 'Pirat', hp: 98, speed: 48, armor: 1, reward: 8, size: 15, lives: 1,
     hint: 'Piraten halten einiges aus.' },
-  gull: { id: 'gull', name: 'Möwe', hp: 50, speed: 78, armor: 0, reward: 7, size: 13, lives: 1, flying: true,
+  gull: { id: 'gull', name: 'Möwe', hp: 57, speed: 78, armor: 0, reward: 7, size: 13, lives: 1, flying: true,
     hint: 'Möwen fliegen! Feuerschalen treffen sie nicht.' },
-  turtle: { id: 'turtle', name: 'Panzerschildkröte', hp: 210, speed: 30, armor: 7, reward: 13, size: 19, lives: 2,
+  turtle: { id: 'turtle', name: 'Panzerschildkröte', hp: 241, speed: 30, armor: 7, reward: 13, size: 19, lives: 2,
     hint: 'Gepanzert: Speer-Totem und Muschelhorn ignorieren die Panzerung.' },
-  shaman: { id: 'shaman', name: 'Seeschamane', hp: 120, speed: 42, armor: 1, reward: 14, size: 15, lives: 1, heal: 0.06,
+  shaman: { id: 'shaman', name: 'Seeschamane', hp: 138, speed: 42, armor: 1, reward: 14, size: 15, lives: 1, heal: 0.06,
     hint: 'Schamanen heilen Gegner in ihrer Nähe – zuerst ausschalten!' },
-  jelly: { id: 'jelly', name: 'Qualle', hp: 130, speed: 40, armor: 0, reward: 5, size: 16, lives: 1, split: { type: 'jellyling', count: 2 },
+  jelly: { id: 'jelly', name: 'Qualle', hp: 150, speed: 40, armor: 0, reward: 5, size: 16, lives: 1, split: { type: 'jellyling', count: 2 },
     hint: 'Quallen teilen sich beim Tod in zwei schnelle Quällchen – Flächenschaden hilft!' },
-  jellyling: { id: 'jellyling', name: 'Quällchen', hp: 40, speed: 72, armor: 0, reward: 2, size: 9, lives: 1,
+  jellyling: { id: 'jellyling', name: 'Quällchen', hp: 46, speed: 72, armor: 0, reward: 2, size: 9, lives: 1,
     hint: 'Klein, schnell und zahlreich.' },
-  eel: { id: 'eel', name: 'Zitteraal', hp: 170, speed: 48, armor: 2, reward: 12, size: 15, lives: 1, shock: { radius: 105, every: 5, duration: 2.5 },
+  eel: { id: 'eel', name: 'Zitteraal', hp: 195, speed: 48, armor: 2, reward: 12, size: 15, lives: 1, shock: { radius: 105, every: 5, duration: 2.5 },
     hint: 'Zitteraale legen Türme in ihrer Nähe mit Stromschlägen kurz lahm. Weitreichende Türme sind sicher!' },
-  kraken: { id: 'kraken', name: 'Kraken', hp: 1400, speed: 22, armor: 4, reward: 120, size: 32, lives: 10, boss: true,
+  kraken: { id: 'kraken', name: 'Kraken', hp: 900, speed: 22, armor: 4, reward: 120, size: 32, lives: 10, boss: true,
     hint: 'Boss! Der Kraken kostet 10 Leben, wenn er durchkommt.' },
 };
 
@@ -240,7 +240,7 @@ export const LEVELS: LevelDef[] = [
   {
     name: 'Palmenstrand', subtitle: 'Die ersten Eindringlinge landen am Strand.',
     paths: [[[-1, 2], [4, 2], [4, 7], [9, 7], [9, 3], [14, 3], [14, 7], [16, 7]]],
-    waves: 10, hpMult: 0.9, coins: 190, lives: 20, seed: 11, theme: BEACH, challenge: { kind: 'maxTowers', n: 6 },
+    waves: 10, hpMult: 0.85, coins: 190, lives: 20, seed: 11, theme: BEACH, challenge: { kind: 'maxTowers', n: 6 },
   },
   {
     name: 'Vulkanhang', subtitle: 'Ein langer Serpentinenpfad den Berg hinauf.',
@@ -271,7 +271,7 @@ export const LEVELS: LevelDef[] = [
   {
     name: 'Quallenbucht', subtitle: 'In der warmen Bucht treiben Quallen an Land.',
     paths: [[[-1, 8], [3, 8], [3, 2], [8, 2], [8, 7], [12, 7], [12, 1], [16, 1]]],
-    waves: 18, hpMult: 1.6, coins: 400, lives: 20, seed: 67, theme: BAY, challenge: { kind: 'noAbilities' },
+    waves: 18, hpMult: 1.45, coins: 400, lives: 20, seed: 67, theme: BAY, challenge: { kind: 'noAbilities' },
   },
   {
     name: 'Gewitterriff', subtitle: 'Zitteraale greifen von zwei Seiten an.',
@@ -279,6 +279,6 @@ export const LEVELS: LevelDef[] = [
       [[18, 7], [14, 7], [14, 4], [9, 4], [9, 8], [4, 8], [4, 3], [1, 3]],
       [[6, -1], [6, 6], [9, 6], [9, 8], [4, 8], [4, 3], [1, 3]],
     ],
-    waves: 20, hpMult: 1.7, coins: 420, lives: 20, seed: 79, theme: THUNDER, challenge: { kind: 'maxTowers', n: 10 },
+    waves: 20, hpMult: 1.5, coins: 420, lives: 20, seed: 79, theme: THUNDER, challenge: { kind: 'maxTowers', n: 10 },
   },
 ];
