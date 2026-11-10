@@ -19,6 +19,15 @@ npm run build
 npm run preview
 ```
 
+## Online spielen (GitHub Pages)
+
+Jeder Push auf `main` baut das Spiel und veröffentlicht es unter
+**https://chocoby10.github.io/Towerdefense-game/** (Workflow: `.github/workflows/deploy-pages.yml`).
+
+Einmalig nötig: im Repo unter *Settings → Pages → Build and deployment → Source* „GitHub Actions“ auswählen.
+
+Auf dem Handy: Seite öffnen, im Browser-Menü „Zum Startbildschirm hinzufügen“ – dann startet das Spiel wie eine App im Vollbild.
+
 ## Inhalt
 
 - 5 Inseln (Level) mit 10–20 Wellen, Freischaltung nacheinander, 1–3 Sterne pro Insel
