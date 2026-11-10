@@ -1,11 +1,11 @@
 import './style.css';
 import { H, SPEEDS, TILE, W } from './game/config';
-import { ABILITIES, ABILITY_ORDER, ENEMIES, LEVELS, TARGET_LABEL, TARGET_MODES, TOWER_ORDER, TOWERS, type AbilityId, type EnemyId, type TowerId, type TowerLevel } from './game/data';
+import { ABILITIES, ABILITY_ORDER, challengeText, ENEMIES, LEVELS, TARGET_LABEL, TARGET_MODES, TOWER_ORDER, TOWERS, type AbilityId, type EnemyId, type TowerId, type TowerLevel } from './game/data';
 import { Enemy, Game, Path, scaleStats, type Tower } from './game/game';
 import { buildMods, DIFFICULTIES, PERKS, perkSpent, type Difficulty, type PerkId } from './game/meta';
 import { buildBackground, drawEnemyIcon, drawTower, Renderer } from './game/renderer';
 import { Audio } from './game/audio';
-import { bestStars, load, save, totalStars } from './game/storage';
+import { BADGE_STARS, bestStars, clearRun, load, loadRun, save, saveRun, shopStars, totalStars } from './game/storage';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -63,6 +63,20 @@ function show(id: 'menu' | 'levels' | 'game'): void {
   $(`#screen-${id}`).classList.add('active');
   if (id === 'levels') renderLevels();
   if (id === 'game') requestAnimationFrame(resize);
+  if (id === 'menu') updateMenu();
+}
+
+/** Zeigt "Fortsetzen", wenn eine unterbrochene Partie gespeichert ist */
+function updateMenu(): void {
+  const run = loadRun();
+  const btn = $<HTMLButtonElement>('#btn-resume');
+  btn.hidden = !run;
+  $('#btn-play').classList.toggle('btn-primary', !run);
+  $('#btn-play').classList.toggle('btn-big', !run);
+  if (run) {
+    const mode = run.endless ? 'Endlos' : DIFFICULTIES[run.difficulty].name;
+    btn.innerHTML = `Fortsetzen<small>${run.level + 1}. ${LEVELS[run.level].name} · ${mode} · vor Welle ${run.wave + 1}</small>`;
+  }
 }
 
 document.addEventListener('pointerdown', () => audio.unlock(), { capture: true });
@@ -79,6 +93,7 @@ document.addEventListener('click', (ev) => {
   else if (a === 'menu') show('menu');
   else if (a === 'howto') openHowTo();
   else if (a === 'settings') openSettings();
+  else if (a === 'resume') resumeRun();
   else if (a === 'shop') openShop();
 });
 
@@ -90,8 +105,9 @@ function renderLevels(): void {
   const grid = $('#level-grid');
   grid.innerHTML = '';
   const total = totalStars(data);
-  const free = total - perkSpent(data.perks);
-  $('#total-stars').innerHTML = `<span style="color:var(--gold)">★</span> ${total} / ${LEVELS.length * 9}${free > 0 ? ` <span class="free">(${free} frei)</span>` : ''}`;
+  const badges = data.badges.filter(Boolean).length;
+  const free = shopStars(data) - perkSpent(data.perks);
+  $('#total-stars').innerHTML = `<span style="color:var(--gold)">★</span> ${total} / ${LEVELS.length * 9} · 🏅 ${badges}/${LEVELS.length}${free > 0 ? ` <span class="free">(${free} frei)</span>` : ''}`;
   LEVELS.forEach((lv, i) => {
     const unlocked = i === 0 || bestStars(data, i - 1) > 0;
     const btn = document.createElement('button');
@@ -106,7 +122,8 @@ function renderLevels(): void {
     info.className = 'info';
     const row = data.stars[i] ?? [0, 0, 0];
     const diffs = DIFFICULTIES.map((d, k) => `<span class="dstars" title="${d.name}">${d.short} ${starsHtml(row[k] ?? 0)}</span>`).join('');
-    const rec = data.endless[i] ? `<span class="rec">∞ Rekord: Welle ${data.endless[i]}</span>` : '';
+    const rec = (data.badges[i] ? '<span class="badge" title="Herausforderung geschafft">🏅</span>' : '')
+      + (data.endless[i] ? `<span class="rec">∞ Rekord: Welle ${data.endless[i]}</span>` : '');
     info.innerHTML = `<h3>${i + 1}. ${lv.name}</h3><p>${lv.subtitle}</p><p>${lv.waves} Wellen</p><div class="diffrow">${diffs}${rec}</div>`;
     btn.appendChild(info);
     if (!unlocked) {
@@ -136,19 +153,24 @@ function openLevelMenu(i: number): void {
       <button class="btn diff-btn" id="lm-endless" ${beaten ? '' : 'disabled'}>
         <span>∞ Endlos</span><span>${beaten ? (data.endless[i] ? `Rekord: Welle ${data.endless[i]}` : 'Noch kein Rekord') : 'Erst Insel schaffen'}</span>
       </button>
+      <button class="btn diff-btn" id="lm-challenge" ${beaten ? '' : 'disabled'}>
+        <span>🏅 ${challengeText(lv.challenge)}</span><span>${data.badges[i] ? 'Geschafft ✓' : beaten ? `+${BADGE_STARS} ★` : 'Erst Insel schaffen'}</span>
+      </button>
       <button class="btn" id="lm-back">Zurück</button>
     </div>
     <p class="hint">Leicht: Gegner −25 % Leben, mehr Startgeld · Schwer: Gegner +30 % Leben, weniger Startgeld.<br>Sterne zählen für jede Schwierigkeit einzeln.</p>
-  `);
+    ${loadRun() ? '<p class="hint warn">Achtung: Deine unterbrochene Partie wird beim Start einer neuen Insel verworfen.</p>' : ''}
+  `, 'level-menu');
   modalCard.querySelectorAll<HTMLButtonElement>('[data-diff]').forEach((b) => {
     b.onclick = () => { closeModal(); startLevel(i, { difficulty: Number(b.dataset.diff) as Difficulty, endless: false }); };
   });
   $('#lm-endless').onclick = () => { closeModal(); startLevel(i, { difficulty: 1, endless: true }); };
+  $('#lm-challenge').onclick = () => { closeModal(); startLevel(i, { difficulty: 1, endless: false, challenge: true }); };
   $('#lm-back').onclick = closeModal;
 }
 
 function openShop(): void {
-  const total = totalStars(data);
+  const total = shopStars(data);
   const free = total - perkSpent(data.perks);
   const items = PERKS.map((p) => {
     const lvl = data.perks[p.id] ?? 0;
@@ -179,7 +201,7 @@ function openShop(): void {
       const id = b.dataset.perk as PerkId;
       const def = PERKS.find((p) => p.id === id)!;
       const lvl = data.perks[id] ?? 0;
-      if (lvl >= def.costs.length || def.costs[lvl] > totalStars(data) - perkSpent(data.perks)) return;
+      if (lvl >= def.costs.length || def.costs[lvl] > shopStars(data) - perkSpent(data.perks)) return;
       data.perks[id] = lvl + 1;
       save(data);
       audio.play('upgrade');
@@ -216,6 +238,8 @@ function openHowTo(): void {
       <li><b>Sterne:</b> 3★ ohne Lebensverlust, 2★ mit mindestens der Hälfte der Leben. Jede Schwierigkeit (Leicht/Normal/Schwer) zählt einzeln.</li>
       <li><b>Sterne-Shop:</b> Gesammelte Sterne gegen dauerhafte Boni tauschen – jederzeit zurücksetzbar.</li>
       <li><b>Endlosmodus:</b> Nach dem ersten Sieg auf einer Insel freigeschaltet. Wie viele Wellen schaffst du?</li>
+      <li><b>Herausforderungen 🏅:</b> Jede Insel hat eine Sonderregel (z. B. „Höchstens 6 Türme“). Geschafft gibt es ein Abzeichen und 2 Shop-Sterne.</li>
+      <li><b>Qualle</b> teilt sich beim Tod, <b>Zitteraal</b> legt Türme in der Nähe kurz lahm – baue weitreichende Türme mit Abstand zum Weg.</li>
     </ul>
     <p><b>Tastatur:</b> 1–5 Turm wählen · Q/E Fähigkeiten · Leertaste Welle · P Pause · F Tempo · U Verbessern · S Verkaufen · Esc Abbrechen</p>
     <div class="actions"><button class="btn btn-primary" id="m-ok">Verstanden</button></div>
@@ -281,7 +305,7 @@ function resume(): void {
 }
 
 function modeLabel(g: Game): string {
-  return g.endless ? 'Endlos' : DIFFICULTIES[g.difficulty].name;
+  return g.endless ? 'Endlos' : g.challenge ? `Herausforderung: ${challengeText(g.challenge)}` : DIFFICULTIES[g.difficulty].name;
 }
 
 function openResult(won: boolean): void {
@@ -307,11 +331,14 @@ function openResult(won: boolean): void {
     const row = data.stars[g.levelIndex] ?? [0, 0, 0];
     const gained = Math.max(0, s - (row[g.difficulty] ?? 0));
     if (gained > 0) { row[g.difficulty] = s; data.stars[g.levelIndex] = row; save(data); }
+    const newBadge = !!g.challenge && !data.badges[g.levelIndex];
+    if (newBadge) { data.badges[g.levelIndex] = true; save(data); }
     const hasNext = g.levelIndex + 1 < LEVELS.length;
     html = `
       <h2>Sieg!</h2>
       <div class="big-stars">${starsHtml(s)}</div>
       <p>${g.level.name} (${modeLabel(g)}) verteidigt – ${g.lives}/${g.maxLives} Leben übrig, ${g.kills} Gegner besiegt.</p>
+      ${newBadge ? `<p class="big-num">🏅 Herausforderung geschafft!</p><p><b>+${BADGE_STARS} ★ für den Sterne-Shop</b></p>` : ''}
       ${gained ? `<p><b>+${gained} ★ für den Sterne-Shop</b></p>` : ''}
       <div class="actions">
         ${hasNext ? '<button class="btn btn-primary btn-big" id="r-next">Nächste Insel</button>' : '<p><b>Du hast alle Inseln gerettet!</b></p>'}
@@ -337,12 +364,34 @@ function openResult(won: boolean): void {
 
 // ======================= Spielstart =======================
 
-interface StartOpts { difficulty: Difficulty; endless: boolean }
+interface StartOpts { difficulty: Difficulty; endless: boolean; challenge?: boolean }
 let lastStart: StartOpts = { difficulty: 1, endless: false };
 
 function startLevel(i: number, opts: StartOpts = lastStart): void {
   lastStart = opts;
-  game = new Game(i, { ...opts, mods: buildMods(opts.difficulty, data.perks) });
+  clearRun();
+  enterGame(new Game(i, { ...opts, mods: buildMods(opts.difficulty, data.perks) }));
+  if (i === 0 && bestStars(data, 0) === 0) {
+    toast('Willkommen, Inselwächter!', 'Wähle in der Turmleiste einen Turm und baue ihn neben den Weg. Dann starte die erste Welle.');
+  } else if (opts.endless) {
+    toast('Endlosmodus', 'Die Wellen hören nicht auf und werden immer stärker. Wie weit kommst du?');
+  } else if (opts.challenge) {
+    toast(`Herausforderung: ${challengeText(LEVELS[i].challenge)}`, 'Gewinne die Insel unter dieser Bedingung für ein Abzeichen.');
+  }
+}
+
+/** Setzt eine unterbrochene Partie am letzten Speicherpunkt fort */
+function resumeRun(): void {
+  const run = loadRun();
+  if (!run) { updateMenu(); return; }
+  if (isTouch && !isStandalone) void enterFullscreen();
+  lastStart = { difficulty: run.difficulty, endless: run.endless, challenge: run.challenge };
+  enterGame(Game.restore(run, buildMods(run.difficulty, data.perks)));
+  toast('Partie fortgesetzt', `Weiter geht's vor Welle ${run.wave + 1}. Deine Türme stehen noch.`);
+}
+
+function enterGame(g: Game): void {
+  game = g;
   renderer = new Renderer(game);
   touchPending = null;
   panel.hidden = true;
@@ -350,11 +399,6 @@ function startLevel(i: number, opts: StartOpts = lastStart): void {
   buildTowerBar();
   buildAbilityBar();
   show('game');
-  if (i === 0 && bestStars(data, 0) === 0) {
-    toast('Willkommen, Inselwächter!', 'Wähle in der Turmleiste einen Turm und baue ihn neben den Weg. Dann starte die erste Welle.');
-  } else if (opts.endless) {
-    toast('Endlosmodus', 'Die Wellen hören nicht auf und werden immer stärker. Wie weit kommst du?');
-  }
 }
 
 function quitGame(): void {
@@ -384,7 +428,8 @@ function buildTowerBar(): void {
     b.innerHTML = `<span class="key">${idx + 1}</span>`;
     b.appendChild(cv);
     const unlocked = game!.isUnlocked(id);
-    b.insertAdjacentHTML('beforeend', `<span class="name">${def.name}</span><span class="cost">${unlocked ? '◉ ' + def.cost : 'Insel ' + (def.unlock + 1)}</span>`);
+    const lockLabel = game!.isBanned(id) ? 'Verboten' : `Insel ${def.unlock + 1}`;
+    b.insertAdjacentHTML('beforeend', `<span class="name">${def.name}</span><span class="cost">${unlocked ? '◉ ' + def.cost : lockLabel}</span>`);
     if (!unlocked) b.classList.add('locked');
     b.addEventListener('click', () => selectPlacing(id));
     bar.appendChild(b);
@@ -395,7 +440,8 @@ function buildTowerBar(): void {
 function selectPlacing(id: TowerId | null): void {
   if (!game) return;
   if (id && !game.isUnlocked(id)) {
-    toast('Noch gesperrt', `${TOWERS[id].name} wird auf Insel ${TOWERS[id].unlock + 1} freigeschaltet.`);
+    if (game.isBanned(id)) toast('Herausforderung', `${TOWERS[id].name} ist in dieser Herausforderung verboten.`);
+    else toast('Noch gesperrt', `${TOWERS[id].name} wird auf Insel ${TOWERS[id].unlock + 1} freigeschaltet.`);
     return;
   }
   game.placing = game.placing === id ? null : id;
@@ -499,6 +545,8 @@ function buildAbilityBar(): void {
   const bar = $('#abilities');
   bar.innerHTML = '';
   abilityButtons.clear();
+  // Herausforderung "Ohne Fähigkeiten": Knöpfe gar nicht erst anzeigen
+  if (game?.challenge?.kind === 'noAbilities') return;
   for (const id of ABILITY_ORDER) {
     const d = ABILITIES[id];
     const b = document.createElement('button');
@@ -709,7 +757,7 @@ function syncHud(): void {
   else if (g.wave >= g.totalWaves) label = 'Letzte Welle';
   else if (can && g.countdown > 0) label = `Nächste Welle ▶ ${Math.ceil(g.countdown)}s`;
   else label = 'Welle läuft…';
-  const k = `${g.lives}|${g.coins}|${g.wave}|${label}|${can}|${g.speed}`;
+  const k = `${g.lives}|${g.coins}|${g.wave}|${label}|${can}|${g.speed}|${g.towers.length}`;
   if (k !== lastHud) {
     lastHud = k;
     hud.lives.textContent = String(g.lives);
@@ -721,6 +769,9 @@ function syncHud(): void {
       void pill.offsetWidth;
       pill.classList.add('bump');
     }
+    const limit = $('#hud-limit');
+    limit.hidden = g.challenge?.kind !== 'maxTowers';
+    if (g.challenge?.kind === 'maxTowers') limit.querySelector('span')!.textContent = `Türme ${g.towers.length}/${g.challenge.n}`;
     hud.wave.textContent = g.endless ? `${g.wave} · Rekord ${Math.max(data.endless[g.levelIndex] ?? 0, g.wave - 1)}` : `${g.wave}/${g.totalWaves}`;
     hud.btnWave.textContent = label;
     hud.btnWave.disabled = !can;
@@ -757,8 +808,9 @@ function frame(now: number): void {
         case 'sfx': audio.play(ev.name); break;
         case 'toast': toast(ev.title, ev.text); break;
         case 'leak': flashDamage(); break;
-        case 'won': setTimeout(() => openResult(true), 900); break;
-        case 'lost': setTimeout(() => openResult(false), 900); break;
+        case 'won': clearRun(); setTimeout(() => openResult(true), 900); break;
+        case 'lost': clearRun(); setTimeout(() => openResult(false), 900); break;
+        case 'checkpoint': if (game.checkpoint) saveRun(game.checkpoint); break;
       }
     }
     game.events.length = 0;
@@ -781,6 +833,15 @@ if (import.meta.env.DEV) (window as unknown as { __game: () => Game | null }).__
   mc.width = bg.width / 2;
   mc.height = bg.height / 2;
   mc.getContext('2d')!.drawImage(bg, 0, 0, mc.width, mc.height);
+}
+
+// Offline-Fähigkeit: Service Worker nur im veröffentlichten Web-Build registrieren
+// (nicht im Entwicklungsmodus und nicht in der Android-App, die ihre Dateien schon lokal hat)
+const isNativeApp = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+if (import.meta.env.PROD && 'serviceWorker' in navigator && !isNativeApp) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => { /* ohne Offline-Modus weiterspielen */ });
+  });
 }
 
 show('menu');

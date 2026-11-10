@@ -28,6 +28,10 @@ export function buildWave(level: LevelDef, levelIndex: number, i: number, endles
   if (t >= 5 && i % 2 === 0) g.push({ type: 'turtle', count: 1 + Math.floor(t * 0.3), interval: 2.4, delay: 10 });
   if (t >= 7 && i % 3 === 1) g.push({ type: 'shaman', count: 1 + Math.floor(t * 0.2), interval: 3, delay: 7 });
 
+  // Neue Gegner nur auf den späteren Inseln (bzw. dort im Endlosmodus)
+  if (levelIndex >= 5 && i >= 1 && i % 2 === 1) g.push({ type: 'jelly', count: 2 + Math.floor(t * 0.3), interval: 1.3, delay: 5 });
+  if (levelIndex >= 6 && i >= 2 && i % 3 !== 0) g.push({ type: 'eel', count: 1 + Math.floor(t * 0.12), interval: 2.5, delay: 9 });
+
   if (last) {
     const krakens = endless ? 1 + Math.floor(i / 20) : levelIndex >= 4 ? 2 : 1;
     g.push({ type: 'kraken', count: krakens, interval: 10, delay: 12 });

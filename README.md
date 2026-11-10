@@ -30,18 +30,21 @@ Auf dem Handy: Seite öffnen, im Browser-Menü „Zum Startbildschirm hinzufüge
 
 ## Inhalt
 
-- 5 Inseln (Level) mit 10–20 Wellen, Freischaltung nacheinander
-- Schwierigkeitsgrade Leicht/Normal/Schwer, je 1–3 Sterne (max. 45 Sterne)
+- 7 Inseln (Level) mit 10–20 Wellen, Freischaltung nacheinander
+- Schwierigkeitsgrade Leicht/Normal/Schwer, je 1–3 Sterne (max. 63 Sterne)
+- Herausforderung pro Insel (z. B. Turm-Limit, ohne Fähigkeiten) mit Abzeichen und 2 Shop-Sternen
 - Endlosmodus pro Insel mit Rekord (alle 10 Wellen ein Kraken)
 - Sterne-Shop mit dauerhaften Boni (Startkapital, Schaden, Reichweite, Abklingzeit, Leben, Verkaufswert)
 - 5 Türme mit je 3 Stufen: Schleuder, Muschelhorn (verlangsamt), Speer-Totem (durchschlägt Panzer), Feuerschale (Fläche + Brand), Sturmstein (Kettenblitz)
 - Spezialisierung auf Stufe 3: pro Turm zwei Zweige (z. B. Doppelschleuder oder Felsbrocken, Speerhagel oder Riesenspeer)
 - Aktive Fähigkeiten mit Abklingzeit: Vulkanbrocken (Flächenschaden an gewählter Stelle) und Flutwelle (spült Bodengegner zurück)
 - Kombo-Bonus für schnelle Mehrfach-Kills, Bildschirmwackeln, Betäubungs- und Treffereffekte
-- 7 Gegnertypen: Krabbe, Gecko, Pirat, Möwe (fliegt), Panzerschildkröte, Seeschamane (heilt), Kraken (Boss)
+- 10 Gegnertypen: Krabbe, Gecko, Pirat, Möwe (fliegt), Panzerschildkröte, Seeschamane (heilt), Qualle (teilt sich in Quällchen), Zitteraal (legt Türme lahm), Kraken (Boss)
 - Zielwahl pro Turm, Verbessern/Verkaufen, Wellenvorschau, Früh-Bonus, 1×/2×/3×-Tempo, Pause
 - Touch-Bedienung (Tippen = Vorschau, nochmal tippen = bauen), Maus und Tastatur
 - Pausiert automatisch, wenn die App in den Hintergrund geht
+- Speichert laufende Partien vor jeder Welle – nach einem Abbruch geht es mit „Fortsetzen“ weiter
+- Offline spielbar nach dem ersten Besuch (Service Worker), installierbar über „Zum Startbildschirm hinzufügen“
 - Fortschritt und Einstellungen werden lokal gespeichert
 
 Vollbild: Auf Handys wechselt das Spiel beim Tippen auf „Spielen“ automatisch in den Vollbildmodus; zusätzlich gibt es den ⛶-Knopf oben rechts (nicht auf iPhones – dort „Zum Home-Bildschirm“ nutzen).
@@ -51,8 +54,11 @@ Tastatur: `1`–`5` Turm · `Q`/`E` Fähigkeiten · `Leertaste` Welle · `P` Pau
 ## Tests
 
 ```bash
-npm test   # prüft, dass kaputte oder manipulierte Spielstände sicher geladen werden
+npm test               # Spiellogik, Speicherpunkte, Schutz gegen kaputte/manipulierte Spielstände
+npm run build && npm run test:browser   # Layout auf 9 Bildschirmgrößen, Fortsetzen, Offline-Start
 ```
+
+Bei jedem Pull Request laufen alle Tests automatisch auf GitHub (Workflow „Prüfen“). Vor jeder Veröffentlichung laufen Build und `npm test`.
 
 ## Balance-Test
 
