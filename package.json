@@ -10,6 +10,7 @@
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
     "sim": "node scripts/simulate.mjs",
+    "test": "node scripts/test-storage.mjs",
     "android:add": "cap add android",
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android"
