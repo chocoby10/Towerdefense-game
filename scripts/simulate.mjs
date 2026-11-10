@@ -27,7 +27,7 @@ function coverage(g, c, r, range) {
   return n;
 }
 
-function play(levelIndex, skill) {
+function play(levelIndex, skill, useAbilities = true) {
   const g = new Game(levelIndex);
   const order = ['sling', 'sling', 'conch', 'spear', 'sling', 'fire', 'storm', 'spear', 'conch', 'fire', 'storm'];
   let oi = 0;
@@ -40,8 +40,11 @@ function play(levelIndex, skill) {
       const unlocked = g.isUnlocked(want);
       const id = unlocked ? want : 'sling';
       // Upgrades bevorzugen, sobald ein paar Türme stehen
-      const upg = g.towers.filter((tw) => tw.upgradeCost !== null).sort((a, b) => a.upgradeCost - b.upgradeCost)[0];
-      if (g.towers.length >= 5 && upg && Math.random() < skill * 0.6 && g.coins >= upg.upgradeCost) g.upgrade(upg);
+      const nextCost = (tw) => (tw.canSpecialize ? tw.def.branches[0].cost : tw.upgradeCost);
+      const upg = g.towers.filter((tw) => nextCost(tw) !== null).sort((a, b) => nextCost(a) - nextCost(b))[0];
+      if (g.towers.length >= 5 && upg && Math.random() < skill * 0.6 && g.coins >= nextCost(upg)) {
+        g.upgrade(upg, upg.canSpecialize ? Math.floor(Math.random() * 2) : undefined);
+      }
       else if (g.coins >= TOWERS[id].cost) {
         let best = null, bs = -1;
         for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
@@ -50,6 +53,18 @@ function play(levelIndex, skill) {
           if (s > bs) { bs = s; best = [c, r]; }
         }
         if (best && g.place(id, best[0], best[1])) oi++;
+      }
+      if (useAbilities && g.enemies.length) {
+        if (g.abilityReady('flood') && g.enemies.some((e) => e.remaining < 250)) g.castFlood();
+        if (g.abilityReady('meteor')) {
+          // Meteor auf den Gegner mit den meisten Nachbarn
+          let best = null, bn = -1;
+          for (const e of g.enemies) {
+            const n = g.enemies.filter((o) => (o.x - e.x) ** 2 + (o.y - e.y) ** 2 < 90 * 90).length;
+            if (n > bn) { bn = n; best = e; }
+          }
+          if (best && bn >= 3) g.castMeteor(best.x, best.y);
+        }
       }
       if (g.canCallWave() && (g.wave === 0 || g.countdown < 18 - 6)) g.callWave();
     }

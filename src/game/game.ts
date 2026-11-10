@@ -1,7 +1,7 @@
 import { COLS, ROWS, TILE, WAVE_DELAY, EARLY_BONUS_PER_SEC, SELL_RATIO } from './config';
 import {
-  ENEMIES, LEVELS, TOWERS,
-  type EnemyDef, type EnemyId, type LevelDef, type TargetMode, type Tile, type TowerDef, type TowerId, type TowerLevel,
+  ABILITIES, ENEMIES, LEVELS, TOWERS,
+  type AbilityId, type EnemyDef, type EnemyId, type LevelDef, type TargetMode, type Tile, type TowerDef, type TowerId, type TowerLevel,
 } from './data';
 import { buildWave, type SpawnGroup } from './waves';
 
@@ -44,6 +44,7 @@ export class Enemy {
   maxHp: number;
   slowAmt = 0;
   slowT = 0;
+  stunT = 0;
   burnDps = 0;
   burnT = 0;
   burnSrc: Tower | null = null;
@@ -79,8 +80,16 @@ export class Tower {
     this.invested = def.cost;
   }
 
-  get stats(): TowerLevel { return this.def.levels[this.level]; }
-  get upgradeCost(): number | null { return this.stats.upgradeCost ?? null; }
+  /** Gewählte Spezialisierung auf Stufe 3 (-1 = keine) */
+  branch = -1;
+
+  get stats(): TowerLevel {
+    return this.level >= 2 ? this.def.branches[this.branch].stats : this.def.levels[this.level];
+  }
+  /** Kosten für die nächste normale Stufe; null, wenn als Nächstes eine Spezialisierung gewählt wird oder max. Stufe */
+  get upgradeCost(): number | null { return this.level === 0 ? this.def.levels[0].upgradeCost ?? null : null; }
+  get canSpecialize(): boolean { return this.level === 1; }
+  get branchName(): string | null { return this.branch >= 0 ? this.def.branches[this.branch].name : null; }
   get sellValue(): number { return Math.floor(this.invested * SELL_RATIO); }
 }
 
@@ -97,9 +106,16 @@ export type Fx =
   | { k: 'p'; x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; g: number }
   | { k: 'ring'; x: number; y: number; r0: number; r1: number; life: number; max: number; color: string; w: number }
   | { k: 'bolt'; pts: Pt[]; life: number; max: number }
-  | { k: 'txt'; x: number; y: number; text: string; color: string; life: number; max: number; size: number };
+  | { k: 'txt'; x: number; y: number; text: string; color: string; life: number; max: number; size: number }
+  | { k: 'flood'; life: number; max: number };
 
-export type Sfx = 'shoot' | 'spear' | 'fire' | 'pulse' | 'zap' | 'hit' | 'pop' | 'boom' | 'build' | 'sell' | 'upgrade' | 'leak' | 'wave' | 'coin' | 'error' | 'win' | 'lose';
+export interface Meteor { x: number; y: number; t: number; max: number }
+
+export const METEOR_RADIUS = 95;
+const METEOR_FALL = 0.6;
+
+export type Sfx = 'shoot' | 'spear' | 'fire' | 'pulse' | 'zap' | 'hit' | 'pop' | 'boom' | 'build' | 'sell' | 'upgrade' | 'leak' | 'wave' | 'coin' | 'error' | 'win' | 'lose'
+  | 'meteor' | 'flood' | 'combo' | 'boss';
 
 export type GameEvent =
   | { type: 'sfx'; name: Sfx }
@@ -159,6 +175,17 @@ export class Game {
   placing: TowerId | null = null;
   selected: Tower | null = null;
   hover: { c: number; r: number } | null = null;
+  /** Zeigerposition in Spielkoordinaten (für Fähigkeiten-Vorschau) */
+  hoverPt: Pt | null = null;
+  /** Fähigkeit, deren Ziel gerade gewählt wird */
+  aiming: AbilityId | null = null;
+  /** Verbleibende Abklingzeit je Fähigkeit in Sekunden */
+  cooldowns: Record<AbilityId, number> = { meteor: 0, flood: 0 };
+  meteors: Meteor[] = [];
+  /** Stärke des Bildschirmwackelns in Pixeln */
+  shake = 0;
+  combo = 0;
+  private comboT = 0;
 
   private spawners: Spawner[] = [];
   private hpScale = 1;
@@ -216,6 +243,10 @@ export class Game {
 
   towerAt(c: number, r: number): Tower | undefined { return this.towerMap.get(key(c, r)); }
 
+  abilityReady(id: AbilityId): boolean {
+    return this.state === 'playing' && this.wave > 0 && this.cooldowns[id] <= 0;
+  }
+
   isUnlocked(id: TowerId): boolean { return TOWERS[id].unlock <= this.levelIndex; }
 
   spawningDone(): boolean { return this.spawners.every((s) => s.spawned >= s.g.count); }
@@ -268,17 +299,52 @@ export class Game {
     return true;
   }
 
-  upgrade(t: Tower): boolean {
-    const cost = t.upgradeCost;
+  /** Verbessert einen Turm. Von Stufe 2 auf 3 muss ein Zweig (0 oder 1) gewählt werden. */
+  upgrade(t: Tower, branch?: number): boolean {
+    let cost: number | null = t.upgradeCost;
+    if (t.canSpecialize) cost = branch === 0 || branch === 1 ? t.def.branches[branch].cost : null;
     if (cost === null || this.coins < cost) { this.sfx('error'); return false; }
     this.coins -= cost;
     t.invested += cost;
     t.level++;
+    if (t.level === 2) t.branch = branch!;
     this.ring(t.x, t.y, 12, 50, 'rgba(255,215,90,0.9)', 0.45, 4);
     for (let i = 0; i < 14; i++) this.particle(t.x, t.y, '#ffd34d', 160, 3, 0.6, -60);
     this.sfx('upgrade');
     return true;
   }
+
+  castMeteor(x: number, y: number): boolean {
+    if (!this.abilityReady('meteor')) { this.sfx('error'); return false; }
+    this.cooldowns.meteor = ABILITIES.meteor.cooldown;
+    this.meteors.push({ x, y, t: METEOR_FALL, max: METEOR_FALL });
+    this.aiming = null;
+    this.sfx('meteor');
+    return true;
+  }
+
+  castFlood(): boolean {
+    if (!this.abilityReady('flood')) { this.sfx('error'); return false; }
+    this.cooldowns.flood = ABILITIES.flood.cooldown;
+    const dmg = 20 + this.wave * 5;
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      if (!e.def.flying) {
+        e.dist = Math.max(0, e.dist - (e.def.boss ? 50 : 140));
+        const p = e.path.at(e.dist);
+        e.x = p.x; e.y = p.y; e.angle = p.angle;
+        this.hurt(e, dmg, null, true);
+      }
+      this.applySlow(e, 0.5, 2.5);
+      for (let i = 0; i < 4; i++) this.particle(e.x, e.y, '#bfe9ff', 120, 3, 0.5, 100);
+    }
+    this.fx.push({ k: 'flood', life: 1.1, max: 1.1 });
+    this.addShake(5);
+    this.sfx('flood');
+    return true;
+  }
+
+  addShake(n: number): void { this.shake = Math.max(this.shake, n); }
 
   sell(t: Tower): void {
     this.coins += t.sellValue;
@@ -293,6 +359,7 @@ export class Game {
   // ---------- Simulation ----------
 
   update(dt: number): void {
+    this.shake = Math.max(0, this.shake - dt * 30);
     if (this.paused || this.state !== 'playing') {
       // Effekte laufen auch bei Pause/Ende weiter aus, damit der Bildschirm nicht "einfriert"
       if (this.state !== 'playing') this.updateFx(dt);
@@ -307,6 +374,26 @@ export class Game {
 
   private step(dt: number): void {
     this.time += dt;
+    for (const id of Object.keys(this.cooldowns) as AbilityId[]) this.cooldowns[id] = Math.max(0, this.cooldowns[id] - dt);
+
+    for (const m of this.meteors) {
+      m.t -= dt;
+      if (m.t <= 0) this.meteorImpact(m);
+    }
+    this.meteors = this.meteors.filter((m) => m.t > 0);
+
+    if (this.combo > 0) {
+      this.comboT -= dt;
+      if (this.comboT <= 0) {
+        if (this.combo >= 5) {
+          const bonus = this.combo - 3;
+          this.coins += bonus;
+          this.fx.push({ k: 'txt', x: 576, y: 300, text: `Kombo ×${this.combo}!  +${bonus}`, color: '#ffe066', life: 1.4, max: 1.4, size: 30 });
+          this.sfx('combo');
+        }
+        this.combo = 0;
+      }
+    }
 
     // Spawns
     for (const s of this.spawners) {
@@ -370,7 +457,28 @@ export class Game {
 
   private spawn(type: EnemyId): void {
     const path = this.paths[this.spawnToggle++ % this.paths.length];
-    this.enemies.push(new Enemy(this.nextId++, ENEMIES[type], path, this.hpScale));
+    const e = new Enemy(this.nextId++, ENEMIES[type], path, this.hpScale);
+    this.enemies.push(e);
+    if (e.def.boss) {
+      this.addShake(8);
+      this.text(this.goal.x < 576 ? 800 : 350, 80, `${e.def.name} taucht auf!`, '#ff7a7a', 26);
+      this.sfx('boss');
+    }
+  }
+
+  private meteorImpact(m: Meteor): void {
+    const dmg = 110 + this.wave * 22;
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      if ((e.x - m.x) ** 2 + (e.y - m.y) ** 2 > (METEOR_RADIUS + e.def.size * 0.5) ** 2) continue;
+      this.hurt(e, dmg, null, true);
+      if (e.alive) { e.burnDps = Math.max(e.burnDps, 20); e.burnT = 3; e.burnSrc = null; }
+    }
+    this.ring(m.x, m.y, 10, METEOR_RADIUS, 'rgba(255,120,30,0.95)', 0.5, 8);
+    this.ring(m.x, m.y, 10, METEOR_RADIUS * 1.4, 'rgba(255,220,120,0.6)', 0.7, 3);
+    for (let i = 0; i < 40; i++) this.particle(m.x, m.y, ['#ff5a1a', '#ffb02e', '#5a4a3a', '#ffe28a'][i % 4], 320, 5, 0.8, 260);
+    this.addShake(12);
+    this.sfx('boom');
   }
 
   private updateEnemy(e: Enemy, dt: number): void {
@@ -400,7 +508,8 @@ export class Game {
         if (any) this.ring(e.x, e.y, 10, 95, 'rgba(125,255,154,0.6)', 0.6, 2);
       }
     }
-    const speed = e.def.speed * (1 - e.slowAmt);
+    if (e.stunT > 0) e.stunT -= dt;
+    const speed = e.stunT > 0 ? 0 : e.def.speed * (1 - e.slowAmt);
     e.dist += speed * dt;
     const p = e.path.at(e.dist);
     e.x = p.x; e.y = p.y; e.angle = p.angle;
@@ -409,6 +518,7 @@ export class Game {
       e.alive = false;
       this.lives = Math.max(0, this.lives - e.def.lives);
       this.events.push({ type: 'leak' });
+      this.addShake(e.def.boss ? 14 : 6);
       this.ring(e.x, e.y, 10, 60, 'rgba(255,60,60,0.9)', 0.5, 4);
       this.text(e.x, e.y - 30, `-${e.def.lives} ♥`, '#ff5a5a', 18);
       this.sfx('leak');
@@ -430,8 +540,12 @@ export class Game {
   }
 
   private findTarget(t: Tower): Enemy | null {
-    let best: Enemy | null = null;
-    let bestScore = -Infinity;
+    return this.findTargets(t, 1)[0] ?? null;
+  }
+
+  /** Die n besten Ziele nach Zielmodus des Turms */
+  private findTargets(t: Tower, n: number): Enemy[] {
+    const scored: { e: Enemy; s: number }[] = [];
     for (const e of this.enemies) {
       if (!this.canHit(t.def, e) || !this.inRange(t, e)) continue;
       let s: number;
@@ -441,9 +555,14 @@ export class Game {
         case 'strong': s = e.hp; break;
         case 'close': s = -((e.x - t.x) ** 2 + (e.y - t.y) ** 2); break;
       }
-      if (s > bestScore) { bestScore = s; best = e; }
+      scored.push({ e, s });
     }
-    return best;
+    if (n === 1) {
+      let best: { e: Enemy; s: number } | null = null;
+      for (const x of scored) if (!best || x.s > best.s) best = x;
+      return best ? [best.e] : [];
+    }
+    return scored.sort((a, b) => b.s - a.s).slice(0, n).map((x) => x.e);
   }
 
   private updateTower(t: Tower, dt: number): void {
@@ -466,7 +585,10 @@ export class Game {
     const s = t.stats;
     switch (t.def.kind) {
       case 'projectile': {
-        this.projectiles.push({ x: t.x, y: t.y - 10, tx: target.x, ty: target.y, target, tower: t, speed: t.def.projSpeed, traveled: 0, dead: false });
+        const targets = (s.multi ?? 1) > 1 ? this.findTargets(t, s.multi!) : [target];
+        for (const tg of targets) {
+          this.projectiles.push({ x: t.x, y: t.y - 10, tx: tg.x, ty: tg.y, target: tg, tower: t, speed: t.def.projSpeed, traveled: 0, dead: false });
+        }
         this.sfx(t.def.id === 'spear' ? 'spear' : t.def.id === 'fire' ? 'fire' : 'shoot');
         break;
       }
@@ -475,7 +597,9 @@ export class Game {
           if (!this.canHit(t.def, e) || !this.inRange(t, e)) continue;
           this.hurt(e, s.damage, t, t.def.pierceArmor);
           this.applySlow(e, s.slow ?? 0, s.slowDur ?? 0);
+          if (s.stun) this.applyStun(e, s.stun);
         }
+        if (s.stun) this.addShake(2);
         this.ring(t.x, t.y, 14, s.range, 'rgba(180,230,255,0.75)', 0.5, 4);
         this.sfx('pulse');
         break;
@@ -489,6 +613,7 @@ export class Game {
           hit.add(cur);
           pts.push({ x: cur.x, y: cur.y });
           this.hurt(cur, dmg, t, t.def.pierceArmor);
+          if (s.stun && cur.alive) this.applyStun(cur, s.stun);
           dmg *= 0.82;
           let next: Enemy | null = null;
           let nd = 125 * 125;
@@ -500,6 +625,7 @@ export class Game {
           cur = next;
         }
         this.fx.push({ k: 'bolt', pts, life: 0.22, max: 0.22 });
+        if (s.stun) this.addShake(3);
         for (const p of pts.slice(1)) this.particle(p.x, p.y, '#bfefff', 90, 2, 0.3, 0);
         this.sfx('zap');
         break;
@@ -532,8 +658,10 @@ export class Game {
           e.burnSrc = t;
         }
       }
-      this.ring(p.tx, p.ty, 6, s.splash, 'rgba(255,140,40,0.85)', 0.35, 5);
-      for (let i = 0; i < 14; i++) this.particle(p.tx, p.ty, i % 2 ? '#ff7a1a' : '#ffd34d', 170, 3.5, 0.5, 120);
+      const fiery = t.def.id === 'fire';
+      this.ring(p.tx, p.ty, 6, s.splash, fiery ? 'rgba(255,140,40,0.85)' : 'rgba(220,210,190,0.8)', 0.35, 5);
+      for (let i = 0; i < 14; i++) this.particle(p.tx, p.ty, fiery ? (i % 2 ? '#ff7a1a' : '#ffd34d') : (i % 2 ? '#8c8478' : '#c9bfae'), 170, 3.5, 0.5, 120);
+      if (s.splash >= 80) this.addShake(1.5);
       this.sfx('boom');
     } else if (p.target && p.target.alive) {
       this.hurt(p.target, s.damage, t, t.def.pierceArmor);
@@ -546,6 +674,14 @@ export class Game {
     const a = e.def.boss ? amt * 0.5 : amt;
     if (a >= e.slowAmt) { e.slowAmt = a; e.slowT = dur; }
     else e.slowT = Math.max(e.slowT, dur * 0.5);
+  }
+
+  private applyStun(e: Enemy, dur: number): void {
+    const d = e.def.boss ? dur * 0.4 : dur;
+    if (d > e.stunT) {
+      e.stunT = d;
+      this.text(e.x, e.y - e.def.size - 14, '✦', '#fff3a0', 14);
+    }
   }
 
   private hurt(e: Enemy, amount: number, src: Tower | null, pierce: boolean, flash = true): void {
@@ -566,7 +702,10 @@ export class Game {
     const n = e.def.boss ? 50 : 10;
     for (let i = 0; i < n; i++) this.particle(e.x, e.y, col, e.def.boss ? 260 : 140, e.def.boss ? 5 : 3, 0.6, 200);
     this.text(e.x, e.y - e.def.size - 6, `+${e.def.reward}`, '#ffd34d', e.def.boss ? 22 : 14);
-    if (e.def.boss) this.ring(e.x, e.y, 10, 140, 'rgba(255,255,255,0.9)', 0.7, 6);
+    this.ring(e.x, e.y, e.def.size * 0.5, e.def.size * 1.8, 'rgba(255,255,255,0.7)', 0.25, 3);
+    if (e.def.boss) { this.ring(e.x, e.y, 10, 140, 'rgba(255,255,255,0.9)', 0.7, 6); this.addShake(14); }
+    this.combo++;
+    this.comboT = 1.0;
     this.sfx(e.def.boss ? 'boom' : 'pop');
   }
 

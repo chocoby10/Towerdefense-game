@@ -22,6 +22,18 @@ export interface TowerLevel {
   slow?: number;
   slowDur?: number;
   chain?: number;
+  /** Anzahl gleichzeitiger Ziele pro Schuss */
+  multi?: number;
+  /** Betäubung in Sekunden (Gegner bleibt stehen) */
+  stun?: number;
+}
+
+/** Spezialisierung auf Stufe 3: Spieler wählt einen von zwei Zweigen. */
+export interface TowerBranch {
+  name: string;
+  desc: string;
+  cost: number;
+  stats: TowerLevel;
 }
 
 export interface TowerDef {
@@ -36,7 +48,10 @@ export interface TowerDef {
   projSpeed: number;
   /** Ab welchem Level (Index) der Turm verfügbar ist */
   unlock: number;
+  /** Stufe 1 und 2 (Index 0 und 1) */
   levels: TowerLevel[];
+  /** Stufe 3: zwei Spezialisierungen */
+  branches: [TowerBranch, TowerBranch];
 }
 
 export const TOWERS: Record<TowerId, TowerDef> = {
@@ -45,8 +60,13 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     cost: 60, hitsAir: true, hitsGround: true, pierceArmor: false, kind: 'projectile', projSpeed: 560, unlock: 0,
     levels: [
       { range: 150, damage: 11, rate: 1.8, upgradeCost: 55 },
-      { range: 165, damage: 18, rate: 2.2, upgradeCost: 100 },
-      { range: 185, damage: 28, rate: 2.7 },
+      { range: 165, damage: 18, rate: 2.2 },
+    ],
+    branches: [
+      { name: 'Doppelschleuder', desc: 'Schießt auf zwei Ziele gleichzeitig.', cost: 100,
+        stats: { range: 185, damage: 24, rate: 2.6, multi: 2 } },
+      { name: 'Felsbrocken', desc: 'Schwere Brocken mit kleinem Flächenschaden.', cost: 110,
+        stats: { range: 175, damage: 62, rate: 1.1, splash: 40 } },
     ],
   },
   conch: {
@@ -54,8 +74,13 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     cost: 80, hitsAir: true, hitsGround: true, pierceArmor: true, kind: 'pulse', projSpeed: 0, unlock: 0,
     levels: [
       { range: 115, damage: 4, rate: 0.9, slow: 0.35, slowDur: 1.4, upgradeCost: 70 },
-      { range: 130, damage: 8, rate: 1.0, slow: 0.45, slowDur: 1.6, upgradeCost: 120 },
-      { range: 150, damage: 14, rate: 1.1, slow: 0.55, slowDur: 1.8 },
+      { range: 130, damage: 8, rate: 1.0, slow: 0.45, slowDur: 1.6 },
+    ],
+    branches: [
+      { name: 'Sturmhorn', desc: 'Starke, lange Verlangsamung mit großer Reichweite.', cost: 120,
+        stats: { range: 170, damage: 10, rate: 1.1, slow: 0.65, slowDur: 2.4 } },
+      { name: 'Donnerhorn', desc: 'Schallschlag mit viel Schaden, betäubt kurz.', cost: 140,
+        stats: { range: 140, damage: 38, rate: 0.9, slow: 0.3, slowDur: 1.2, stun: 0.35 } },
     ],
   },
   spear: {
@@ -63,8 +88,13 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     cost: 110, hitsAir: true, hitsGround: true, pierceArmor: true, kind: 'projectile', projSpeed: 950, unlock: 0,
     levels: [
       { range: 230, damage: 42, rate: 0.55, upgradeCost: 95 },
-      { range: 260, damage: 78, rate: 0.65, upgradeCost: 165 },
-      { range: 295, damage: 135, rate: 0.75 },
+      { range: 260, damage: 78, rate: 0.65 },
+    ],
+    branches: [
+      { name: 'Speerhagel', desc: 'Wirft drei Speere auf verschiedene Ziele.', cost: 170,
+        stats: { range: 270, damage: 75, rate: 0.75, multi: 3 } },
+      { name: 'Riesenspeer', desc: 'Enorme Reichweite und Schaden – ideal gegen Bosse.', cost: 180,
+        stats: { range: 340, damage: 330, rate: 0.45 } },
     ],
   },
   fire: {
@@ -72,8 +102,13 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     cost: 140, hitsAir: false, hitsGround: true, pierceArmor: false, kind: 'projectile', projSpeed: 380, unlock: 1,
     levels: [
       { range: 140, damage: 20, rate: 0.75, splash: 55, burnDps: 6, burnDur: 2.5, upgradeCost: 115 },
-      { range: 150, damage: 34, rate: 0.85, splash: 65, burnDps: 11, burnDur: 2.5, upgradeCost: 190 },
-      { range: 165, damage: 55, rate: 0.95, splash: 78, burnDps: 18, burnDur: 3 },
+      { range: 150, damage: 34, rate: 0.85, splash: 65, burnDps: 11, burnDur: 2.5 },
+    ],
+    branches: [
+      { name: 'Lavaschale', desc: 'Glut brennt lange und sehr heiß.', cost: 190,
+        stats: { range: 160, damage: 40, rate: 0.85, splash: 72, burnDps: 34, burnDur: 4 } },
+      { name: 'Feuersturm', desc: 'Wirft doppelt so schnell mit großer Fläche.', cost: 200,
+        stats: { range: 165, damage: 48, rate: 1.7, splash: 85, burnDps: 12, burnDur: 2.5 } },
     ],
   },
   storm: {
@@ -81,11 +116,33 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     cost: 200, hitsAir: true, hitsGround: true, pierceArmor: false, kind: 'chain', projSpeed: 0, unlock: 2,
     levels: [
       { range: 165, damage: 32, rate: 0.85, chain: 3, upgradeCost: 165 },
-      { range: 180, damage: 52, rate: 0.95, chain: 4, upgradeCost: 270 },
-      { range: 200, damage: 80, rate: 1.1, chain: 6 },
+      { range: 180, damage: 52, rate: 0.95, chain: 4 },
+    ],
+    branches: [
+      { name: 'Kugelblitz', desc: 'Springt auf bis zu zehn Gegner.', cost: 270,
+        stats: { range: 200, damage: 70, rate: 1.1, chain: 10 } },
+      { name: 'Himmelszorn', desc: 'Gewaltiger Blitz, der Gegner betäubt.', cost: 280,
+        stats: { range: 210, damage: 210, rate: 0.8, chain: 3, stun: 0.8 } },
     ],
   },
 };
+
+export type AbilityId = 'meteor' | 'flood';
+
+export interface AbilityDef {
+  id: AbilityId;
+  name: string;
+  desc: string;
+  icon: string;
+  cooldown: number;
+  key: string;
+}
+
+export const ABILITIES: Record<AbilityId, AbilityDef> = {
+  meteor: { id: 'meteor', name: 'Vulkanbrocken', desc: 'Tippe auf die Karte: ein glühender Brocken schlägt ein und verbrennt alles im Umkreis.', icon: '☄️', cooldown: 40, key: 'Q' },
+  flood: { id: 'flood', name: 'Flutwelle', desc: 'Spült alle Bodengegner ein Stück zurück und bremst sie.', icon: '🌊', cooldown: 60, key: 'E' },
+};
+export const ABILITY_ORDER: AbilityId[] = ['meteor', 'flood'];
 
 export const TOWER_ORDER: TowerId[] = ['sling', 'conch', 'spear', 'fire', 'storm'];
 
@@ -174,7 +231,7 @@ export const LEVELS: LevelDef[] = [
   {
     name: 'Riffspirale', subtitle: 'Sie kommen vom Meer und winden sich ins Inselinnere.',
     paths: [[[18, 1], [2, 1], [2, 8], [15, 8], [15, 4], [6, 4], [6, 6], [11, 6]]],
-    waves: 16, hpMult: 1.6, coins: 310, lives: 20, seed: 41, theme: REEF,
+    waves: 16, hpMult: 2.4, coins: 310, lives: 20, seed: 41, theme: REEF,
   },
   {
     name: 'Sturmküste', subtitle: 'Die letzte Schlacht: Angriff von Norden und Süden.',

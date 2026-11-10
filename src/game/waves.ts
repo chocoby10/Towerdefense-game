@@ -34,6 +34,6 @@ export function buildWave(level: LevelDef, levelIndex: number, i: number): Wave 
     g.push({ type: 'turtle', count: 2 + Math.floor(t / 4), interval: 1.6, delay: 14 });
   }
 
-  const hpScale = level.hpMult * (1 + 0.17 * i + 0.016 * i * i);
+  const hpScale = level.hpMult * (1 + 0.21 * i + 0.022 * i * i);
   return { groups: g, hpScale };
 }

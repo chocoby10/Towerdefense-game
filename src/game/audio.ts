@@ -96,6 +96,10 @@ export class Audio {
       case 'wave': this.arp([392, 523, 659], now, 0.12, 'sawtooth', 0.08, out); break;
       case 'error': this.sweep(160, 120, now, 0.15, 'square', 0.08, out); break;
       case 'win': this.arp([523, 659, 784, 1047, 784, 1047], now, 0.14, 'triangle', 0.18, out); break;
+      case 'meteor': this.sweep(1200, 200, now, 0.6, 'sawtooth', 0.06, out); this.noise(now, 0.6, 0.1, 3000, out); break;
+      case 'flood': this.noise(now, 1.2, 0.35, 900, out); this.sweep(90, 50, now, 1.0, 'sine', 0.25, out); break;
+      case 'combo': this.arp([659, 784, 988, 1319], now, 0.06, 'square', 0.08, out); break;
+      case 'boss': this.arp([110, 104, 98], now, 0.35, 'sawtooth', 0.18, out); this.noise(now, 0.8, 0.15, 300, out); break;
       case 'lose': this.arp([392, 330, 262, 196], now, 0.25, 'sawtooth', 0.12, out); break;
     }
   }

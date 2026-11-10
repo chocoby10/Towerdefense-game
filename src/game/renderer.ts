@@ -1,13 +1,13 @@
 import { COLS, H, ROWS, TILE, W } from './config';
 import { TOWERS, type TowerId } from './data';
-import { Enemy, Game, inBounds, key, mulberry32, type Decor } from './game';
+import { Enemy, Game, inBounds, key, METEOR_RADIUS, mulberry32, type Decor } from './game';
 
 type Ctx = CanvasRenderingContext2D;
 const TAU = Math.PI * 2;
 
 // ======================= Türme =======================
 
-export function drawTower(ctx: Ctx, id: TowerId, lvl: number, x: number, y: number, angle: number, t: number, recoil = 0): void {
+export function drawTower(ctx: Ctx, id: TowerId, lvl: number, x: number, y: number, angle: number, t: number, recoil = 0, branch = -1): void {
   ctx.save();
   ctx.translate(x, y);
 
@@ -185,6 +185,19 @@ export function drawTower(ctx: Ctx, id: TowerId, lvl: number, x: number, y: numb
     star(ctx, -9 + i * 9, 15, 4);
     ctx.fill();
     ctx.stroke();
+  }
+  // Spezialisierung: farbiges Wimpel-Abzeichen (A = blau, B = rot)
+  if (branch >= 0) {
+    const col = branch === 0 ? '#3fa9f5' : '#e8553a';
+    ctx.strokeStyle = '#4a3420';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(19, 12); ctx.lineTo(19, -12); ctx.stroke();
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.moveTo(19, -12); ctx.lineTo(31, -8 + Math.sin(t * 6) * 1.5); ctx.lineTo(19, -3); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 7px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(branch === 0 ? 'A' : 'B', 23.5, -5.5);
   }
   ctx.restore();
 }
@@ -417,6 +430,14 @@ function drawEnemy(ctx: Ctx, e: Enemy): void {
     ctx.fill();
     ctx.globalAlpha = 1;
   }
+  if (e.stunT > 0) {
+    ctx.fillStyle = '#fff3a0';
+    for (let i = 0; i < 3; i++) {
+      const a = e.anim * 6 + (i / 3) * TAU;
+      star(ctx, Math.cos(a) * s * 0.8, -s - 6 + Math.sin(a) * 3, 3.5);
+      ctx.fill();
+    }
+  }
   if (e.slowAmt > 0) {
     ctx.strokeStyle = 'rgba(150,215,255,0.8)';
     ctx.lineWidth = 2;
@@ -645,6 +666,9 @@ export class Renderer {
   draw(ctx: Ctx): void {
     const g = this.game;
     const t = performance.now() / 1000;
+    if (g.shake > 0) { ctx.fillStyle = '#0a2a3d'; ctx.fillRect(0, 0, W, H); }
+    ctx.save();
+    if (g.shake > 0) ctx.translate((Math.random() - 0.5) * g.shake, (Math.random() - 0.5) * g.shake);
     ctx.drawImage(this.bg, 0, 0, W, H);
 
     // Bau-Raster
@@ -670,7 +694,7 @@ export class Renderer {
     // Bodengegner + Türme nach Y sortiert, damit sie sich korrekt überlappen
     const items: { y: number; draw: () => void }[] = [];
     for (const e of g.enemies) if (!e.def.flying) items.push({ y: e.y, draw: () => drawEnemy(ctx, e) });
-    for (const tw of g.towers) items.push({ y: tw.y + 8, draw: () => drawTower(ctx, tw.def.id, tw.level, tw.x, tw.y, tw.angle, t, tw.recoil) });
+    for (const tw of g.towers) items.push({ y: tw.y + 8, draw: () => drawTower(ctx, tw.def.id, tw.level, tw.x, tw.y, tw.angle, t, tw.recoil, tw.branch) });
     items.sort((a, b) => a.y - b.y);
     for (const it of items) it.draw();
 
@@ -707,6 +731,11 @@ export class Renderer {
         ctx.fillStyle = '#eee';
         ctx.beginPath(); ctx.moveTo(10, -4); ctx.lineTo(20, 0); ctx.lineTo(10, 4); ctx.fill();
         ctx.restore();
+      } else if (p.tower.stats.splash) {
+        ctx.fillStyle = '#6d665c';
+        circle(ctx, p.x, p.y, 8); ctx.fill();
+        ctx.fillStyle = '#9a9184';
+        circle(ctx, p.x - 2, p.y - 2, 3.5); ctx.fill();
       } else {
         ctx.fillStyle = '#7d7d7d';
         circle(ctx, p.x, p.y, 4.5); ctx.fill();
@@ -716,6 +745,28 @@ export class Renderer {
     }
 
     for (const e of g.enemies) if (e.def.flying) drawEnemy(ctx, e);
+
+    // Fallende Vulkanbrocken
+    for (const m of g.meteors) {
+      const f = 1 - m.t / m.max;
+      ctx.strokeStyle = `rgba(255,90,30,${0.4 + f * 0.5})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(m.x, m.y, METEOR_RADIUS * (1 - f * 0.3), 0, TAU); ctx.stroke();
+      const mx = m.x + (1 - f) * 260, my = m.y - (1 - f) * 520;
+      const tr = ctx.createLinearGradient(mx, my, mx + 70, my - 140);
+      tr.addColorStop(0, 'rgba(255,200,80,0.9)');
+      tr.addColorStop(1, 'rgba(255,90,30,0)');
+      ctx.strokeStyle = tr;
+      ctx.lineWidth = 16;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx + 70, my - 140); ctx.stroke();
+      ctx.fillStyle = '#5a3a24';
+      circle(ctx, mx, my, 16); ctx.fill();
+      ctx.fillStyle = '#ff7a1a';
+      circle(ctx, mx - 3, my + 3, 9); ctx.fill();
+      ctx.fillStyle = '#ffe28a';
+      circle(ctx, mx - 4, my + 4, 4); ctx.fill();
+    }
 
     // Effekte
     for (const f of g.fx) {
@@ -751,6 +802,24 @@ export class Renderer {
           }
           break;
         }
+        case 'flood': {
+          // Welle läuft von links nach rechts über die Insel
+          const f = 1 - a;
+          const x = -260 + f * (W + 520);
+          const gr = ctx.createLinearGradient(x - 260, 0, x, 0);
+          gr.addColorStop(0, 'rgba(40,150,220,0)');
+          gr.addColorStop(0.75, 'rgba(60,170,235,0.45)');
+          gr.addColorStop(1, 'rgba(220,245,255,0.8)');
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = gr;
+          ctx.beginPath();
+          ctx.moveTo(x - 260, 0);
+          for (let yy = 0; yy <= H; yy += 32) ctx.lineTo(x + Math.sin(yy / 40 + t * 8) * 14, yy);
+          ctx.lineTo(x - 260, H);
+          ctx.closePath();
+          ctx.fill();
+          break;
+        }
         case 'txt':
           ctx.globalAlpha = Math.min(1, a * 2);
           ctx.font = `800 ${f.size}px system-ui, sans-serif`;
@@ -771,6 +840,20 @@ export class Renderer {
       drawTower(ctx, g.placing, 0, (g.hover.c + 0.5) * TILE, (g.hover.r + 0.5) * TILE, -Math.PI / 2, t);
       ctx.globalAlpha = 1;
     }
+
+    // Zielvorschau für den Vulkanbrocken
+    if (g.aiming === 'meteor' && g.hoverPt) {
+      const { x, y } = g.hoverPt;
+      ctx.fillStyle = 'rgba(255,90,30,0.18)';
+      ctx.strokeStyle = 'rgba(255,120,40,0.9)';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 6]);
+      ctx.lineDashOffset = -t * 30;
+      ctx.beginPath(); ctx.arc(x, y, METEOR_RADIUS, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(x - 10, y); ctx.lineTo(x + 10, y); ctx.moveTo(x, y - 10); ctx.lineTo(x, y + 10); ctx.stroke();
+    }
+    ctx.restore();
   }
 
   private range(ctx: Ctx, x: number, y: number, r: number, fill: string, stroke: string): void {
