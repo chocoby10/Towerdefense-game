@@ -25,6 +25,36 @@ let renderer: Renderer | null = null;
 let viewScale = 1;
 let touchPending: { c: number; r: number } | null = null;
 
+// ======================= Vollbild =======================
+
+const fsSupported = typeof document.documentElement.requestFullscreen === 'function';
+const isStandalone = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
+const isTouch = matchMedia('(pointer: coarse)').matches;
+const fsButton = $<HTMLButtonElement>('#btn-fs');
+
+async function enterFullscreen(): Promise<void> {
+  if (!fsSupported) return;
+  try {
+    if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+    await o.lock?.('landscape');
+  } catch {
+    /* Browser lehnt ab (z. B. iPhone) – Spiel läuft normal weiter */
+  }
+}
+
+function toggleFullscreen(): void {
+  if (document.fullscreenElement) void document.exitFullscreen();
+  else void enterFullscreen();
+}
+
+fsButton.hidden = !fsSupported || isStandalone;
+fsButton.addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', () => {
+  fsButton.textContent = document.fullscreenElement ? '✕' : '⛶';
+  fsButton.setAttribute('aria-label', document.fullscreenElement ? 'Vollbild beenden' : 'Vollbild');
+});
+
 // ======================= Bildschirme =======================
 
 function show(id: 'menu' | 'levels' | 'game'): void {
@@ -40,7 +70,11 @@ document.addEventListener('click', (ev) => {
   const el = (ev.target as HTMLElement).closest<HTMLElement>('[data-action]');
   if (!el) return;
   const a = el.dataset.action;
-  if (a === 'levels') show('levels');
+  if (a === 'levels') {
+    // Auf Handys beim Spielstart automatisch Vollbild (braucht eine Nutzeraktion, daher hier)
+    if (isTouch && !isStandalone) void enterFullscreen();
+    show('levels');
+  }
   else if (a === 'menu') show('menu');
   else if (a === 'howto') openHowTo();
   else if (a === 'settings') openSettings();
