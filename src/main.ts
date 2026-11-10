@@ -1,6 +1,6 @@
 import './style.css';
 import { H, SPEEDS, TILE, W } from './game/config';
-import { ENEMIES, LEVELS, TARGET_LABEL, TARGET_MODES, TOWER_ORDER, TOWERS, type EnemyId, type TowerId } from './game/data';
+import { ABILITIES, ABILITY_ORDER, ENEMIES, LEVELS, TARGET_LABEL, TARGET_MODES, TOWER_ORDER, TOWERS, type AbilityId, type EnemyId, type TowerId, type TowerLevel } from './game/data';
 import { Enemy, Game, Path, type Tower } from './game/game';
 import { buildBackground, drawEnemyIcon, drawTower, Renderer } from './game/renderer';
 import { Audio } from './game/audio';
@@ -134,13 +134,16 @@ function openHowTo(): void {
     <ul>
       <li><b>Turm bauen:</b> Turm unten auswählen, dann auf ein freies Feld tippen. Auf dem Handy: einmal tippen für die Vorschau, nochmal tippen zum Bauen.</li>
       <li><b>Verbessern/Verkaufen:</b> Auf einen gebauten Turm tippen.</li>
+      <li><b>Spezialisierung:</b> Auf Stufe 3 wählst du für jeden Turm einen von zwei Zweigen (A oder B) – z. B. Doppelschleuder oder Felsbrocken.</li>
+      <li><b>Fähigkeiten</b> (unten links): ☄️ Vulkanbrocken auf eine Stelle werfen, 🌊 Flutwelle spült Gegner zurück. Danach brauchen sie eine Weile zum Aufladen.</li>
+      <li><b>Kombos:</b> Besiege 5 oder mehr Gegner kurz hintereinander für Bonus-Muscheln.</li>
       <li><b>Zielwahl:</b> Jeder Turm kann den vordersten, hintersten, stärksten oder nächsten Gegner anvisieren.</li>
       <li><b>Wellen früher rufen</b> bringt Bonus-Muscheln.</li>
       <li><b>Möwen</b> fliegen – die Feuerschale trifft sie nicht.</li>
       <li><b>Panzer</b> verringert Schaden. Speer-Totem und Muschelhorn ignorieren ihn.</li>
       <li><b>Sterne:</b> 3★ ohne Lebensverlust, 2★ mit mindestens der Hälfte der Leben.</li>
     </ul>
-    <p><b>Tastatur:</b> 1–5 Turm wählen · Leertaste Welle · P Pause · F Tempo · U Verbessern · S Verkaufen · Esc Abbrechen</p>
+    <p><b>Tastatur:</b> 1–5 Turm wählen · Q/E Fähigkeiten · Leertaste Welle · P Pause · F Tempo · U Verbessern · S Verkaufen · Esc Abbrechen</p>
     <div class="actions"><button class="btn btn-primary" id="m-ok">Verstanden</button></div>
   `, 'howto');
   $('#m-ok').onclick = closeModal;
@@ -245,6 +248,7 @@ function startLevel(i: number): void {
   panel.hidden = true;
   $('#toasts').innerHTML = '';
   buildTowerBar();
+  buildAbilityBar();
   show('game');
   if (i === 0 && !(data.stars[0] > 0)) {
     toast('Willkommen, Inselwächter!', 'Wähle in der Turmleiste einen Turm und baue ihn neben den Weg. Dann starte die erste Welle.');
@@ -293,6 +297,7 @@ function selectPlacing(id: TowerId | null): void {
     return;
   }
   game.placing = game.placing === id ? null : id;
+  game.aiming = null;
   game.selected = null;
   touchPending = null;
   if (!game.placing) game.hover = null;
@@ -303,37 +308,59 @@ function selectPlacing(id: TowerId | null): void {
 
 let panelKey = '';
 
-function updatePanel(): void {
-  const g = game;
-  const t = g?.selected;
-  if (!g || !t) { panel.hidden = true; panelKey = ''; return; }
-  const cost = t.upgradeCost;
-  const k = `${t.c},${t.r},${t.level},${t.mode},${cost !== null && g.coins >= cost}`;
-  if (k === panelKey && !panel.hidden) return;
-  panelKey = k;
-  const s = t.stats;
-  const n = cost !== null ? t.def.levels[t.level + 1] : null;
+function statRows(s: TowerLevel, n: TowerLevel | null, kills: number | null): string {
   const row = (label: string, a: number | string, b?: number | string) =>
     `<tr><td>${label}</td><td>${a}${b !== undefined && b !== a ? ` <span class="up">→ ${b}</span>` : ''}</td></tr>`;
+  const pct = (v?: number) => (v ? `${Math.round(v * 100)}%` : undefined);
   const rows = [
     row('Schaden', s.damage, n?.damage),
     row('Reichweite', s.range, n?.range),
     row('Schuss/Sek.', s.rate.toFixed(2), n?.rate.toFixed(2)),
   ];
-  if (s.splash) rows.push(row('Fläche', s.splash, n?.splash));
-  if (s.burnDps) rows.push(row('Brand/Sek.', s.burnDps, n?.burnDps));
-  if (s.slow) rows.push(row('Verlangsamung', `${Math.round(s.slow * 100)}%`, n?.slow ? `${Math.round(n.slow * 100)}%` : undefined));
-  if (s.chain) rows.push(row('Sprünge', s.chain, n?.chain));
-  rows.push(row('Besiegt', t.kills));
+  if (s.multi || n?.multi) rows.push(row('Ziele', s.multi ?? 1, n ? n.multi ?? 1 : undefined));
+  if (s.splash || n?.splash) rows.push(row('Fläche', s.splash ?? '–', n?.splash));
+  if (s.burnDps || n?.burnDps) rows.push(row('Brand/Sek.', s.burnDps ?? '–', n?.burnDps));
+  if (s.slow || n?.slow) rows.push(row('Verlangsamung', pct(s.slow) ?? '–', pct(n?.slow)));
+  if (s.chain || n?.chain) rows.push(row('Sprünge', s.chain ?? '–', n?.chain));
+  if (s.stun || n?.stun) rows.push(row('Betäubung', s.stun ? `${s.stun}s` : '–', n?.stun ? `${n.stun}s` : undefined));
+  if (kills !== null) rows.push(row('Besiegt', kills));
+  return `<table>${rows.join('')}</table>`;
+}
+
+function updatePanel(): void {
+  const g = game;
+  const t = g?.selected;
+  if (!g || !t) { panel.hidden = true; panelKey = ''; return; }
+  const cost = t.upgradeCost;
+  const br = t.def.branches;
+  const afford = t.canSpecialize ? br.map((b) => g.coins >= b.cost).join() : String(cost !== null && g.coins >= cost);
+  const k = `${t.c},${t.r},${t.level},${t.branch},${t.mode},${afford},${t.kills}`;
+  if (k === panelKey && !panel.hidden) return;
+  panelKey = k;
+  const s = t.stats;
+
+  let upgradeHtml: string;
+  if (t.canSpecialize) {
+    upgradeHtml = `<div class="spec-title">Spezialisierung wählen</div>` + br.map((b, i) => `
+      <div class="spec spec-${i}">
+        <div class="spec-head"><b>${i === 0 ? 'A' : 'B'} · ${b.name}</b></div>
+        <div class="desc">${b.desc}</div>
+        ${statRows(s, b.stats, null)}
+        <button class="btn btn-primary" id="tp-b${i}" ${g.coins < b.cost ? 'disabled' : ''}>Wählen ◉ ${b.cost}</button>
+      </div>`).join('');
+  } else if (cost !== null) {
+    upgradeHtml = `${statRows(s, t.def.levels[t.level + 1], t.kills)}
+      <div class="row"><button class="btn btn-primary" id="tp-up" ${g.coins < cost ? 'disabled' : ''}>Verbessern ◉ ${cost}</button></div>`;
+  } else {
+    upgradeHtml = `${statRows(s, null, t.kills)}<div class="row"><button class="btn" disabled>Max. Stufe</button></div>`;
+  }
+
   panel.innerHTML = `
     <button class="close" id="tp-close" aria-label="Schließen">×</button>
-    <h3>${t.def.name}</h3>
+    <h3>${t.def.name}${t.branchName ? ` <span class="branch-tag spec-${t.branch}">${t.branchName}</span>` : ''}</h3>
     <div class="lvl">${'★'.repeat(t.level + 1)}${'☆'.repeat(2 - t.level)} Stufe ${t.level + 1}</div>
-    <div class="desc">${t.def.desc}</div>
-    <table>${rows.join('')}</table>
-    <div class="row">
-      <button class="btn btn-primary" id="tp-up" ${cost === null || g.coins < cost ? 'disabled' : ''}>${cost === null ? 'Max. Stufe' : `Verbessern ◉ ${cost}`}</button>
-    </div>
+    <div class="desc">${t.branch >= 0 ? br[t.branch].desc : t.def.desc}</div>
+    ${upgradeHtml}
     <div class="row" style="margin-top:8px">
       <button class="btn" id="tp-mode">Ziel: ${TARGET_LABEL[t.mode]}</button>
       <button class="btn btn-danger" id="tp-sell">Verkaufen ◉ ${t.sellValue}</button>
@@ -346,7 +373,9 @@ function updatePanel(): void {
   else { panel.style.right = '12px'; panel.style.left = ''; }
   panel.hidden = false;
   $('#tp-close').onclick = () => { if (game) game.selected = null; updatePanel(); };
-  $('#tp-up').onclick = () => doUpgrade(t);
+  document.getElementById('tp-up')?.addEventListener('click', () => doUpgrade(t));
+  document.getElementById('tp-b0')?.addEventListener('click', () => doUpgrade(t, 0));
+  document.getElementById('tp-b1')?.addEventListener('click', () => doUpgrade(t, 1));
   $('#tp-sell').onclick = () => doSell(t);
   $('#tp-mode').onclick = () => {
     t.mode = TARGET_MODES[(TARGET_MODES.indexOf(t.mode) + 1) % TARGET_MODES.length];
@@ -354,8 +383,62 @@ function updatePanel(): void {
   };
 }
 
-function doUpgrade(t: Tower): void { if (game?.upgrade(t)) updatePanel(); }
+function doUpgrade(t: Tower, branch?: number): void {
+  if (t.canSpecialize && branch === undefined) return; // Zweig muss im Panel gewählt werden
+  if (game?.upgrade(t, branch)) updatePanel();
+}
 function doSell(t: Tower): void { game?.sell(t); updatePanel(); }
+
+// ======================= Fähigkeiten =======================
+
+const abilityButtons = new Map<AbilityId, HTMLButtonElement>();
+
+function buildAbilityBar(): void {
+  const bar = $('#abilities');
+  bar.innerHTML = '';
+  abilityButtons.clear();
+  for (const id of ABILITY_ORDER) {
+    const d = ABILITIES[id];
+    const b = document.createElement('button');
+    b.className = 'ability';
+    b.title = `${d.name} (${d.key}): ${d.desc}`;
+    b.innerHTML = `<span class="icon">${d.icon}</span><span class="cd"></span><span class="key">${d.key}</span>`;
+    b.addEventListener('click', () => useAbility(id));
+    bar.appendChild(b);
+    abilityButtons.set(id, b);
+  }
+}
+
+function useAbility(id: AbilityId): void {
+  const g = game;
+  if (!g || g.paused) return;
+  if (!g.abilityReady(id)) {
+    if (g.wave === 0) toast(ABILITIES[id].name, 'Fähigkeiten sind ab der ersten Welle verfügbar.');
+    return;
+  }
+  if (id === 'flood') { g.castFlood(); return; }
+  // Vulkanbrocken: Ziel auf der Karte wählen
+  g.placing = null;
+  g.selected = null;
+  touchPending = null;
+  g.aiming = g.aiming === 'meteor' ? null : 'meteor';
+  if (g.aiming && isTouch) toast(ABILITIES.meteor.name, 'Tippe auf die Stelle, an der er einschlagen soll.');
+  updatePanel();
+}
+
+function syncAbilities(g: Game): void {
+  for (const [id, b] of abilityButtons) {
+    const cd = g.cooldowns[id];
+    const max = ABILITIES[id].cooldown;
+    const ready = g.abilityReady(id);
+    b.classList.toggle('ready', ready);
+    b.classList.toggle('aiming', g.aiming === id);
+    b.style.setProperty('--p', g.wave === 0 ? '1' : String(cd / max));
+    const label = cd > 0 ? String(Math.ceil(cd)) : '';
+    const el = b.querySelector('.cd')!;
+    if (el.textContent !== label) el.textContent = label;
+  }
+}
 
 // ======================= Eingabe =======================
 
@@ -368,9 +451,10 @@ canvas.addEventListener('pointermove', (ev) => {
   if (!game || ev.pointerType === 'touch') return;
   const p = toGame(ev);
   game.hover = { c: Math.floor(p.x / TILE), r: Math.floor(p.y / TILE) };
+  game.hoverPt = p;
 });
 canvas.addEventListener('pointerleave', (ev) => {
-  if (game && ev.pointerType !== 'touch') game.hover = null;
+  if (game && ev.pointerType !== 'touch') { game.hover = null; game.hoverPt = null; }
 });
 
 canvas.addEventListener('pointerdown', (ev) => {
@@ -378,6 +462,12 @@ canvas.addEventListener('pointerdown', (ev) => {
   const p = toGame(ev);
   const c = Math.floor(p.x / TILE), r = Math.floor(p.y / TILE);
   const g = game;
+
+  if (g.aiming === 'meteor') {
+    g.castMeteor(p.x, p.y);
+    g.hoverPt = null;
+    return;
+  }
 
   if (g.placing) {
     const existing = g.towerAt(c, r);
@@ -411,7 +501,7 @@ window.addEventListener('keydown', (ev) => {
   const g = game;
   if (ev.key === 'Escape') {
     if (!modal.hidden) { if (g.state === 'playing') resume(); return; }
-    if (g.placing || g.selected) { g.placing = null; g.selected = null; g.hover = null; updatePanel(); }
+    if (g.placing || g.selected || g.aiming) { g.placing = null; g.selected = null; g.aiming = null; g.hover = null; updatePanel(); }
     else openPause();
     return;
   }
@@ -420,6 +510,8 @@ window.addEventListener('keydown', (ev) => {
   if (n >= 1 && n <= TOWER_ORDER.length) selectPlacing(TOWER_ORDER[n - 1]);
   else if (ev.key === ' ') { ev.preventDefault(); g.callWave(); }
   else if (ev.key === 'p' || ev.key === 'P') openPause();
+  else if (ev.key === 'q' || ev.key === 'Q') useAbility('meteor');
+  else if (ev.key === 'e' || ev.key === 'E') useAbility('flood');
   else if (ev.key === 'f' || ev.key === 'F') cycleSpeed();
   else if ((ev.key === 'u' || ev.key === 'U') && g.selected) doUpgrade(g.selected);
   else if ((ev.key === 's' || ev.key === 'S') && g.selected) doSell(g.selected);
@@ -519,7 +611,14 @@ function syncHud(): void {
   if (k !== lastHud) {
     lastHud = k;
     hud.lives.textContent = String(g.lives);
+    const prevCoins = Number(hud.coins.textContent);
     hud.coins.textContent = String(g.coins);
+    if (g.coins > prevCoins) {
+      const pill = hud.coins.parentElement!;
+      pill.classList.remove('bump');
+      void pill.offsetWidth;
+      pill.classList.add('bump');
+    }
     hud.wave.textContent = `${g.wave}/${g.totalWaves}`;
     hud.btnWave.textContent = label;
     hud.btnWave.disabled = !can;
@@ -564,9 +663,13 @@ function frame(now: number): void {
     if (game.selected && !game.towers.includes(game.selected)) { game.selected = null; updatePanel(); }
     renderer.draw(ctx);
     syncHud();
+    syncAbilities(game);
   }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// Nur im Entwicklungsmodus: Zugriff für automatisierte Tests
+if (import.meta.env.DEV) (window as unknown as { __game: () => Game | null }).__game = () => game;
 
 show('menu');

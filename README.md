@@ -32,6 +32,9 @@ Auf dem Handy: Seite öffnen, im Browser-Menü „Zum Startbildschirm hinzufüge
 
 - 5 Inseln (Level) mit 10–20 Wellen, Freischaltung nacheinander, 1–3 Sterne pro Insel
 - 5 Türme mit je 3 Stufen: Schleuder, Muschelhorn (verlangsamt), Speer-Totem (durchschlägt Panzer), Feuerschale (Fläche + Brand), Sturmstein (Kettenblitz)
+- Spezialisierung auf Stufe 3: pro Turm zwei Zweige (z. B. Doppelschleuder oder Felsbrocken, Speerhagel oder Riesenspeer)
+- Aktive Fähigkeiten mit Abklingzeit: Vulkanbrocken (Flächenschaden an gewählter Stelle) und Flutwelle (spült Bodengegner zurück)
+- Kombo-Bonus für schnelle Mehrfach-Kills, Bildschirmwackeln, Betäubungs- und Treffereffekte
 - 7 Gegnertypen: Krabbe, Gecko, Pirat, Möwe (fliegt), Panzerschildkröte, Seeschamane (heilt), Kraken (Boss)
 - Zielwahl pro Turm, Verbessern/Verkaufen, Wellenvorschau, Früh-Bonus, 1×/2×/3×-Tempo, Pause
 - Touch-Bedienung (Tippen = Vorschau, nochmal tippen = bauen), Maus und Tastatur
@@ -40,7 +43,7 @@ Auf dem Handy: Seite öffnen, im Browser-Menü „Zum Startbildschirm hinzufüge
 
 Vollbild: Auf Handys wechselt das Spiel beim Tippen auf „Spielen“ automatisch in den Vollbildmodus; zusätzlich gibt es den ⛶-Knopf oben rechts (nicht auf iPhones – dort „Zum Home-Bildschirm“ nutzen).
 
-Tastatur: `1`–`5` Turm · `Leertaste` Welle · `P` Pause · `F` Tempo · `U` Verbessern · `S` Verkaufen · `Esc` Abbrechen · `Shift`+Klick baut mehrere Türme hintereinander
+Tastatur: `1`–`5` Turm · `Q`/`E` Fähigkeiten · `Leertaste` Welle · `P` Pause · `F` Tempo · `U` Verbessern · `S` Verkaufen · `Esc` Abbrechen · `Shift`+Klick baut mehrere Türme hintereinander
 
 ## Balance-Test
 
