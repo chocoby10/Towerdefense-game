@@ -1,10 +1,11 @@
 import './style.css';
 import { H, SPEEDS, TILE, W } from './game/config';
 import { ABILITIES, ABILITY_ORDER, ENEMIES, LEVELS, TARGET_LABEL, TARGET_MODES, TOWER_ORDER, TOWERS, type AbilityId, type EnemyId, type TowerId, type TowerLevel } from './game/data';
-import { Enemy, Game, Path, type Tower } from './game/game';
+import { Enemy, Game, Path, scaleStats, type Tower } from './game/game';
+import { buildMods, DIFFICULTIES, PERKS, perkSpent, type Difficulty, type PerkId } from './game/meta';
 import { buildBackground, drawEnemyIcon, drawTower, Renderer } from './game/renderer';
 import { Audio } from './game/audio';
-import { load, save } from './game/storage';
+import { bestStars, load, save, totalStars } from './game/storage';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -78,6 +79,7 @@ document.addEventListener('click', (ev) => {
   else if (a === 'menu') show('menu');
   else if (a === 'howto') openHowTo();
   else if (a === 'settings') openSettings();
+  else if (a === 'shop') openShop();
 });
 
 function starsHtml(n: number): string {
@@ -87,10 +89,11 @@ function starsHtml(n: number): string {
 function renderLevels(): void {
   const grid = $('#level-grid');
   grid.innerHTML = '';
-  const total = data.stars.reduce((a, b) => a + (b || 0), 0);
-  $('#total-stars').innerHTML = `<span style="color:var(--gold)">★</span> ${total} / ${LEVELS.length * 3}`;
+  const total = totalStars(data);
+  const free = total - perkSpent(data.perks);
+  $('#total-stars').innerHTML = `<span style="color:var(--gold)">★</span> ${total} / ${LEVELS.length * 9}${free > 0 ? ` <span class="free">(${free} frei)</span>` : ''}`;
   LEVELS.forEach((lv, i) => {
-    const unlocked = i === 0 || (data.stars[i - 1] ?? 0) > 0;
+    const unlocked = i === 0 || bestStars(data, i - 1) > 0;
     const btn = document.createElement('button');
     btn.className = 'level-card';
     btn.disabled = !unlocked;
@@ -101,21 +104,90 @@ function renderLevels(): void {
     btn.appendChild(cv);
     const info = document.createElement('div');
     info.className = 'info';
-    info.innerHTML = `<h3>${i + 1}. ${lv.name}</h3><p>${lv.subtitle}</p><p>${lv.waves} Wellen</p>`;
+    const row = data.stars[i] ?? [0, 0, 0];
+    const diffs = DIFFICULTIES.map((d, k) => `<span class="dstars" title="${d.name}">${d.short} ${starsHtml(row[k] ?? 0)}</span>`).join('');
+    const rec = data.endless[i] ? `<span class="rec">∞ Rekord: Welle ${data.endless[i]}</span>` : '';
+    info.innerHTML = `<h3>${i + 1}. ${lv.name}</h3><p>${lv.subtitle}</p><p>${lv.waves} Wellen</p><div class="diffrow">${diffs}${rec}</div>`;
     btn.appendChild(info);
-    const st = document.createElement('div');
-    st.className = 'stars';
-    st.innerHTML = starsHtml(data.stars[i] ?? 0);
-    btn.appendChild(st);
     if (!unlocked) {
       const lock = document.createElement('div');
       lock.className = 'lock';
       lock.textContent = '🔒';
       btn.appendChild(lock);
     }
-    btn.addEventListener('click', () => startLevel(i));
+    btn.addEventListener('click', () => openLevelMenu(i));
     grid.appendChild(btn);
   });
+}
+
+/** Auswahl von Schwierigkeit oder Endlosmodus für eine Insel */
+function openLevelMenu(i: number): void {
+  const lv = LEVELS[i];
+  const row = data.stars[i] ?? [0, 0, 0];
+  const beaten = bestStars(data, i) > 0;
+  openModal(`
+    <h2>${i + 1}. ${lv.name}</h2>
+    <p>${lv.subtitle}</p>
+    <div class="actions">
+      ${DIFFICULTIES.map((d, k) => `
+        <button class="btn ${k === 1 ? 'btn-primary' : ''} diff-btn" data-diff="${k}">
+          <span>${d.name}</span><span class="stars">${starsHtml(row[k] ?? 0)}</span>
+        </button>`).join('')}
+      <button class="btn diff-btn" id="lm-endless" ${beaten ? '' : 'disabled'}>
+        <span>∞ Endlos</span><span>${beaten ? (data.endless[i] ? `Rekord: Welle ${data.endless[i]}` : 'Noch kein Rekord') : 'Erst Insel schaffen'}</span>
+      </button>
+      <button class="btn" id="lm-back">Zurück</button>
+    </div>
+    <p class="hint">Leicht: Gegner −25 % Leben, mehr Startgeld · Schwer: Gegner +30 % Leben, weniger Startgeld.<br>Sterne zählen für jede Schwierigkeit einzeln.</p>
+  `);
+  modalCard.querySelectorAll<HTMLButtonElement>('[data-diff]').forEach((b) => {
+    b.onclick = () => { closeModal(); startLevel(i, { difficulty: Number(b.dataset.diff) as Difficulty, endless: false }); };
+  });
+  $('#lm-endless').onclick = () => { closeModal(); startLevel(i, { difficulty: 1, endless: true }); };
+  $('#lm-back').onclick = closeModal;
+}
+
+function openShop(): void {
+  const total = totalStars(data);
+  const free = total - perkSpent(data.perks);
+  const items = PERKS.map((p) => {
+    const lvl = data.perks[p.id] ?? 0;
+    const max = p.costs.length;
+    const cost = lvl < max ? p.costs[lvl] : null;
+    const pips = Array.from({ length: max }, (_, k) => `<span class="pip ${k < lvl ? 'on' : ''}"></span>`).join('');
+    return `
+      <div class="perk">
+        <div class="perk-icon">${p.icon}</div>
+        <div class="perk-info">
+          <b>${p.name}</b> <span class="pips">${pips}</span>
+          <div class="perk-eff">${lvl ? p.effect(lvl) : 'Noch nicht gekauft'}${cost !== null ? ` → <span class="up">${p.effect(lvl + 1)}</span>` : ''}</div>
+        </div>
+        <button class="btn btn-primary" data-perk="${p.id}" ${cost === null || cost > free ? 'disabled' : ''}>${cost === null ? 'Max.' : `★ ${cost}`}</button>
+      </div>`;
+  }).join('');
+  openModal(`
+    <h2>Sterne-Shop</h2>
+    <p>Freie Sterne: <b class="free-stars">★ ${free}</b> von ${total}. Boni gelten dauerhaft auf allen Inseln.</p>
+    <div class="perks">${items}</div>
+    <div class="actions">
+      <button class="btn btn-primary" id="shop-ok">Fertig</button>
+      <button class="btn" id="shop-reset" ${perkSpent(data.perks) ? '' : 'disabled'}>Alle Boni zurücksetzen (Sterne zurück)</button>
+    </div>
+  `, 'shop');
+  modalCard.querySelectorAll<HTMLButtonElement>('[data-perk]').forEach((b) => {
+    b.onclick = () => {
+      const id = b.dataset.perk as PerkId;
+      const def = PERKS.find((p) => p.id === id)!;
+      const lvl = data.perks[id] ?? 0;
+      if (lvl >= def.costs.length || def.costs[lvl] > totalStars(data) - perkSpent(data.perks)) return;
+      data.perks[id] = lvl + 1;
+      save(data);
+      audio.play('upgrade');
+      openShop();
+    };
+  });
+  $('#shop-reset').onclick = () => { data.perks = {}; save(data); openShop(); };
+  $('#shop-ok').onclick = () => { closeModal(); renderLevels(); };
 }
 
 // ======================= Modals =======================
@@ -141,7 +213,9 @@ function openHowTo(): void {
       <li><b>Wellen früher rufen</b> bringt Bonus-Muscheln.</li>
       <li><b>Möwen</b> fliegen – die Feuerschale trifft sie nicht.</li>
       <li><b>Panzer</b> verringert Schaden. Speer-Totem und Muschelhorn ignorieren ihn.</li>
-      <li><b>Sterne:</b> 3★ ohne Lebensverlust, 2★ mit mindestens der Hälfte der Leben.</li>
+      <li><b>Sterne:</b> 3★ ohne Lebensverlust, 2★ mit mindestens der Hälfte der Leben. Jede Schwierigkeit (Leicht/Normal/Schwer) zählt einzeln.</li>
+      <li><b>Sterne-Shop:</b> Gesammelte Sterne gegen dauerhafte Boni tauschen – jederzeit zurücksetzbar.</li>
+      <li><b>Endlosmodus:</b> Nach dem ersten Sieg auf einer Insel freigeschaltet. Wie viele Wellen schaffst du?</li>
     </ul>
     <p><b>Tastatur:</b> 1–5 Turm wählen · Q/E Fähigkeiten · Leertaste Welle · P Pause · F Tempo · U Verbessern · S Verkaufen · Esc Abbrechen</p>
     <div class="actions"><button class="btn btn-primary" id="m-ok">Verstanden</button></div>
@@ -172,6 +246,8 @@ function openSettings(): void {
   $('#s-reset').onclick = () => {
     if (confirm('Wirklich den gesamten Fortschritt löschen?')) {
       data.stars = [];
+      data.endless = [];
+      data.perks = {};
       save(data);
       closeModal();
       if ($('#screen-levels').classList.contains('active')) renderLevels();
@@ -185,7 +261,7 @@ function openPause(): void {
   game.paused = true;
   openModal(`
     <h2>Pause</h2>
-    <p>${game.level.name} · Welle ${game.wave}/${game.totalWaves}</p>
+    <p>${game.level.name} · ${modeLabel(game)} · Welle ${game.endless ? game.wave : `${game.wave}/${game.totalWaves}`}</p>
     <div class="actions">
       <button class="btn btn-primary btn-big" id="p-resume">Weiter</button>
       <button class="btn" id="p-restart">Neu starten</button>
@@ -194,7 +270,7 @@ function openPause(): void {
     </div>
   `);
   $('#p-resume').onclick = resume;
-  $('#p-restart').onclick = () => { closeModal(); if (game) startLevel(game.levelIndex); };
+  $('#p-restart').onclick = () => { closeModal(); if (game) startLevel(game.levelIndex, lastStart); };
   $('#p-settings').onclick = () => { openSettings(); $('#m-ok').onclick = () => openPause(); };
   $('#p-quit').onclick = () => { closeModal(); quitGame(); };
 }
@@ -204,19 +280,39 @@ function resume(): void {
   if (game) game.paused = false;
 }
 
+function modeLabel(g: Game): string {
+  return g.endless ? 'Endlos' : DIFFICULTIES[g.difficulty].name;
+}
+
 function openResult(won: boolean): void {
   if (!game) return;
   const g = game;
   let html: string;
-  if (won) {
+  if (g.endless) {
+    // Endlosmodus endet immer mit einer Niederlage – gezählt wird die erreichte Welle
+    const reached = Math.max(0, g.wave - 1);
+    const prev = data.endless[g.levelIndex] ?? 0;
+    const record = reached > prev;
+    if (record) { data.endless[g.levelIndex] = reached; save(data); }
+    html = `
+      <h2>${record ? 'Neuer Rekord!' : 'Überrannt!'}</h2>
+      <p class="big-num">${reached} ${reached === 1 ? 'Welle' : 'Wellen'} überstanden</p>
+      <p>${record ? (prev ? `Alter Rekord: ${prev}` : 'Dein erster Rekord auf dieser Insel.') : `Rekord: ${prev}`} · ${g.kills} Gegner besiegt</p>
+      <div class="actions">
+        <button class="btn btn-primary btn-big" id="r-retry">Nochmal</button>
+        <button class="btn" id="r-levels">Inselauswahl</button>
+      </div>`;
+  } else if (won) {
     const s = g.stars();
-    const prev = data.stars[g.levelIndex] ?? 0;
-    if (s > prev) { data.stars[g.levelIndex] = s; save(data); }
+    const row = data.stars[g.levelIndex] ?? [0, 0, 0];
+    const gained = Math.max(0, s - (row[g.difficulty] ?? 0));
+    if (gained > 0) { row[g.difficulty] = s; data.stars[g.levelIndex] = row; save(data); }
     const hasNext = g.levelIndex + 1 < LEVELS.length;
     html = `
       <h2>Sieg!</h2>
       <div class="big-stars">${starsHtml(s)}</div>
-      <p>${g.level.name} verteidigt – ${g.lives}/${g.maxLives} Leben übrig, ${g.kills} Gegner besiegt.</p>
+      <p>${g.level.name} (${modeLabel(g)}) verteidigt – ${g.lives}/${g.maxLives} Leben übrig, ${g.kills} Gegner besiegt.</p>
+      ${gained ? `<p><b>+${gained} ★ für den Sterne-Shop</b></p>` : ''}
       <div class="actions">
         ${hasNext ? '<button class="btn btn-primary btn-big" id="r-next">Nächste Insel</button>' : '<p><b>Du hast alle Inseln gerettet!</b></p>'}
         <button class="btn" id="r-retry">Nochmal spielen</button>
@@ -226,7 +322,7 @@ function openResult(won: boolean): void {
     html = `
       <h2>Niederlage</h2>
       <p>Das Heiligtum ist gefallen – in Welle ${g.wave} von ${g.totalWaves}.</p>
-      <p>Tipp: Baue Muschelhörner an Kurven und verbessere starke Türme, statt nur neue zu bauen.</p>
+      <p>Tipp: Baue Muschelhörner an Kurven, nutze die Fähigkeiten und verbessere starke Türme, statt nur neue zu bauen.${g.difficulty > 0 ? ' Oder versuch es auf „Leicht“.' : ''}</p>
       <div class="actions">
         <button class="btn btn-primary btn-big" id="r-retry">Nochmal versuchen</button>
         <button class="btn" id="r-levels">Inselauswahl</button>
@@ -234,15 +330,19 @@ function openResult(won: boolean): void {
   }
   openModal(html);
   const next = document.getElementById('r-next');
-  if (next) next.onclick = () => { closeModal(); startLevel(g.levelIndex + 1); };
-  $('#r-retry').onclick = () => { closeModal(); startLevel(g.levelIndex); };
+  if (next) next.onclick = () => { closeModal(); quitGame(); openLevelMenu(g.levelIndex + 1); };
+  $('#r-retry').onclick = () => { closeModal(); startLevel(g.levelIndex, lastStart); };
   $('#r-levels').onclick = () => { closeModal(); quitGame(); };
 }
 
 // ======================= Spielstart =======================
 
-function startLevel(i: number): void {
-  game = new Game(i);
+interface StartOpts { difficulty: Difficulty; endless: boolean }
+let lastStart: StartOpts = { difficulty: 1, endless: false };
+
+function startLevel(i: number, opts: StartOpts = lastStart): void {
+  lastStart = opts;
+  game = new Game(i, { ...opts, mods: buildMods(opts.difficulty, data.perks) });
   renderer = new Renderer(game);
   touchPending = null;
   panel.hidden = true;
@@ -250,8 +350,10 @@ function startLevel(i: number): void {
   buildTowerBar();
   buildAbilityBar();
   show('game');
-  if (i === 0 && !(data.stars[0] > 0)) {
+  if (i === 0 && bestStars(data, 0) === 0) {
     toast('Willkommen, Inselwächter!', 'Wähle in der Turmleiste einen Turm und baue ihn neben den Weg. Dann starte die erste Welle.');
+  } else if (opts.endless) {
+    toast('Endlosmodus', 'Die Wellen hören nicht auf und werden immer stärker. Wie weit kommst du?');
   }
 }
 
@@ -345,11 +447,11 @@ function updatePanel(): void {
       <div class="spec spec-${i}">
         <div class="spec-head"><b>${i === 0 ? 'A' : 'B'} · ${b.name}</b></div>
         <div class="desc">${b.desc}</div>
-        ${statRows(s, b.stats, null)}
+        ${statRows(s, scaleStats(b.stats, t.mods), null)}
         <button class="btn btn-primary" id="tp-b${i}" ${g.coins < b.cost ? 'disabled' : ''}>Wählen ◉ ${b.cost}</button>
       </div>`).join('');
   } else if (cost !== null) {
-    upgradeHtml = `${statRows(s, t.def.levels[t.level + 1], t.kills)}
+    upgradeHtml = `${statRows(s, scaleStats(t.def.levels[t.level + 1], t.mods), t.kills)}
       <div class="row"><button class="btn btn-primary" id="tp-up" ${g.coins < cost ? 'disabled' : ''}>Verbessern ◉ ${cost}</button></div>`;
   } else {
     upgradeHtml = `${statRows(s, null, t.kills)}<div class="row"><button class="btn" disabled>Max. Stufe</button></div>`;
@@ -429,7 +531,7 @@ function useAbility(id: AbilityId): void {
 function syncAbilities(g: Game): void {
   for (const [id, b] of abilityButtons) {
     const cd = g.cooldowns[id];
-    const max = ABILITIES[id].cooldown;
+    const max = g.abilityMax(id);
     const ready = g.abilityReady(id);
     b.classList.toggle('ready', ready);
     b.classList.toggle('aiming', g.aiming === id);
@@ -619,7 +721,7 @@ function syncHud(): void {
       void pill.offsetWidth;
       pill.classList.add('bump');
     }
-    hud.wave.textContent = `${g.wave}/${g.totalWaves}`;
+    hud.wave.textContent = g.endless ? `${g.wave} · Rekord ${Math.max(data.endless[g.levelIndex] ?? 0, g.wave - 1)}` : `${g.wave}/${g.totalWaves}`;
     hud.btnWave.textContent = label;
     hud.btnWave.disabled = !can;
     hud.btnWave.classList.toggle('pulse', g.wave === 0);

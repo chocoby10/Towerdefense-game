@@ -15,8 +15,9 @@ export interface Wave {
 }
 
 /** Erzeugt Welle i (0-basiert) für ein Level. Deterministisch, damit Level reproduzierbar sind. */
-export function buildWave(level: LevelDef, levelIndex: number, i: number): Wave {
-  const last = i === level.waves - 1;
+/** endless: Wellen gehen unbegrenzt weiter, alle 10 Wellen kommt ein Kraken. */
+export function buildWave(level: LevelDef, levelIndex: number, i: number, endless = false): Wave {
+  const last = endless ? i % 10 === 9 : i === level.waves - 1;
   const t = i + Math.floor(levelIndex * 1.5); // effektive Stufe
   const g: SpawnGroup[] = [];
 
@@ -28,7 +29,8 @@ export function buildWave(level: LevelDef, levelIndex: number, i: number): Wave 
   if (t >= 7 && i % 3 === 1) g.push({ type: 'shaman', count: 1 + Math.floor(t * 0.2), interval: 3, delay: 7 });
 
   if (last) {
-    g.push({ type: 'kraken', count: levelIndex >= 4 ? 2 : 1, interval: 10, delay: 12 });
+    const krakens = endless ? 1 + Math.floor(i / 20) : levelIndex >= 4 ? 2 : 1;
+    g.push({ type: 'kraken', count: krakens, interval: 10, delay: 12 });
   } else if (i % 5 === 4) {
     // Zwischenboss-Welle
     g.push({ type: 'turtle', count: 2 + Math.floor(t / 4), interval: 1.6, delay: 14 });

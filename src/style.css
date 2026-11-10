@@ -438,3 +438,28 @@ html, body {
 /* Hinweise oben mittig, damit sie die Fähigkeiten nicht verdecken */
 #toasts { top: 10px; bottom: auto; }
 #tower-panel { z-index: 3; }
+
+/* ---------- Schwierigkeit, Endlos, Shop ---------- */
+#total-stars .free { color: #8dff9a; font-size: 13px; }
+.level-card .diffrow { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.level-card .dstars .on { color: #e0a800; }
+.level-card .dstars .off { color: #d9ccb0; }
+.level-card .rec { color: #2a7fa8; }
+.modal-card .diff-btn { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.modal-card .diff-btn .stars .off { color: rgba(0, 0, 0, 0.2); }
+.modal-card .diff-btn .stars .on { color: #b8860b; }
+.modal-card .hint { font-size: 12px; margin-top: 12px; }
+.modal-card .big-num { font-size: 26px; font-weight: 800; color: var(--ink); margin: 8px 0; }
+.modal-card.shop { width: min(560px, 94vw); text-align: left; }
+.modal-card.shop h2, .modal-card.shop > p { text-align: center; }
+.free-stars { color: #b8860b; }
+.perks { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.perk { display: flex; align-items: center; gap: 12px; background: #f3e6c8; border-radius: 12px; padding: 8px 10px; }
+.perk-icon { width: 36px; height: 36px; border-radius: 50%; background: #2b2118; color: var(--gold); display: grid; place-items: center; font-size: 18px; flex: none; }
+.perk-info { flex: 1; min-width: 0; font-size: 14px; }
+.perk-eff { font-size: 12px; color: var(--muted); }
+.perk-eff .up { color: #2f8a3c; font-weight: 700; }
+.perk .btn { flex: none; padding: 8px 12px; font-size: 14px; }
+.pips { display: inline-flex; gap: 3px; vertical-align: middle; margin-left: 4px; }
+.pip { width: 9px; height: 9px; border-radius: 50%; background: #d9ccb0; }
+.pip.on { background: #e0a800; }
