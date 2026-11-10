@@ -1,5 +1,5 @@
 export type TowerId = 'sling' | 'conch' | 'spear' | 'fire' | 'storm';
-export type EnemyId = 'crab' | 'gecko' | 'pirate' | 'gull' | 'turtle' | 'shaman' | 'kraken';
+export type EnemyId = 'crab' | 'gecko' | 'pirate' | 'gull' | 'turtle' | 'shaman' | 'kraken' | 'jelly' | 'jellyling' | 'eel';
 export type TargetMode = 'first' | 'last' | 'strong' | 'close';
 
 export const TARGET_MODES: TargetMode[] = ['first', 'last', 'strong', 'close'];
@@ -160,6 +160,10 @@ export interface EnemyDef {
   boss?: boolean;
   /** Heilt Verbündete in der Nähe um diesen Anteil der Max-HP pro Sekunde */
   heal?: number;
+  /** Zerfällt beim Tod in diese Gegner */
+  split?: { type: EnemyId; count: number };
+  /** Stromschlag: legt Türme im Umkreis für einige Sekunden lahm */
+  shock?: { radius: number; every: number; duration: number };
   hint: string;
 }
 
@@ -176,11 +180,30 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
     hint: 'Gepanzert: Speer-Totem und Muschelhorn ignorieren die Panzerung.' },
   shaman: { id: 'shaman', name: 'Seeschamane', hp: 120, speed: 42, armor: 1, reward: 14, size: 15, lives: 1, heal: 0.06,
     hint: 'Schamanen heilen Gegner in ihrer Nähe – zuerst ausschalten!' },
+  jelly: { id: 'jelly', name: 'Qualle', hp: 130, speed: 40, armor: 0, reward: 5, size: 16, lives: 1, split: { type: 'jellyling', count: 2 },
+    hint: 'Quallen teilen sich beim Tod in zwei schnelle Quällchen – Flächenschaden hilft!' },
+  jellyling: { id: 'jellyling', name: 'Quällchen', hp: 40, speed: 72, armor: 0, reward: 2, size: 9, lives: 1,
+    hint: 'Klein, schnell und zahlreich.' },
+  eel: { id: 'eel', name: 'Zitteraal', hp: 170, speed: 48, armor: 2, reward: 12, size: 15, lives: 1, shock: { radius: 105, every: 5, duration: 2.5 },
+    hint: 'Zitteraale legen Türme in ihrer Nähe mit Stromschlägen kurz lahm. Weitreichende Türme sind sicher!' },
   kraken: { id: 'kraken', name: 'Kraken', hp: 1400, speed: 22, armor: 4, reward: 120, size: 32, lives: 10, boss: true,
     hint: 'Boss! Der Kraken kostet 10 Leben, wenn er durchkommt.' },
 };
 
 export type Tile = [number, number];
+
+export type Challenge =
+  | { kind: 'maxTowers'; n: number }
+  | { kind: 'ban'; tower: TowerId }
+  | { kind: 'noAbilities' };
+
+export function challengeText(c: Challenge): string {
+  switch (c.kind) {
+    case 'maxTowers': return `Höchstens ${c.n} Türme`;
+    case 'ban': return `Ohne ${TOWERS[c.tower].name}`;
+    case 'noAbilities': return 'Ohne Fähigkeiten';
+  }
+}
 
 export interface LevelTheme {
   grass: string;
@@ -201,6 +224,8 @@ export interface LevelDef {
   lives: number;
   seed: number;
   theme: LevelTheme;
+  /** Herausforderung für diese Insel (auf Normal) */
+  challenge: Challenge;
 }
 
 const BEACH: LevelTheme = { grass: '#6cbf5a', grass2: '#62b352', path: '#e9d39b', pathEdge: '#c9ad6e', decor: '#2f7d3a' };
@@ -208,17 +233,19 @@ const VOLCANO: LevelTheme = { grass: '#7a9a4c', grass2: '#6f8e44', path: '#9c827
 const LAGOON: LevelTheme = { grass: '#5fb98a', grass2: '#55ad7f', path: '#f0e0b0', pathEdge: '#cdb57c', decor: '#1f6e55' };
 const REEF: LevelTheme = { grass: '#8bc46a', grass2: '#7fb85f', path: '#f3d9a8', pathEdge: '#d4b17a', decor: '#3b7d39' };
 const STORM: LevelTheme = { grass: '#4f8f5a', grass2: '#478451', path: '#b9b09a', pathEdge: '#8a826f', decor: '#25502d' };
+const BAY: LevelTheme = { grass: '#74c49c', grass2: '#69b892', path: '#f2dcc0', pathEdge: '#d2b08e', decor: '#2e7a5e' };
+const THUNDER: LevelTheme = { grass: '#5e8c74', grass2: '#56826b', path: '#c9c2b0', pathEdge: '#958d7a', decor: '#2c4f3d' };
 
 export const LEVELS: LevelDef[] = [
   {
     name: 'Palmenstrand', subtitle: 'Die ersten Eindringlinge landen am Strand.',
     paths: [[[-1, 2], [4, 2], [4, 7], [9, 7], [9, 3], [14, 3], [14, 7], [16, 7]]],
-    waves: 10, hpMult: 0.9, coins: 190, lives: 20, seed: 11, theme: BEACH,
+    waves: 10, hpMult: 0.9, coins: 190, lives: 20, seed: 11, theme: BEACH, challenge: { kind: 'maxTowers', n: 6 },
   },
   {
     name: 'Vulkanhang', subtitle: 'Ein langer Serpentinenpfad den Berg hinauf.',
     paths: [[[-1, 5], [3, 5], [3, 1], [7, 1], [7, 8], [11, 8], [11, 2], [15, 2], [15, 6], [16, 6]]],
-    waves: 12, hpMult: 1.2, coins: 230, lives: 20, seed: 23, theme: VOLCANO,
+    waves: 12, hpMult: 1.2, coins: 230, lives: 20, seed: 23, theme: VOLCANO, challenge: { kind: 'ban', tower: 'sling' },
   },
   {
     name: 'Zwillingslagune', subtitle: 'Zwei Landungsstellen – teile deine Kräfte auf.',
@@ -226,19 +253,32 @@ export const LEVELS: LevelDef[] = [
       [[-1, 1], [5, 1], [5, 5], [12, 5], [12, 8], [16, 8]],
       [[-1, 8], [2, 8], [2, 5], [5, 5], [12, 5], [12, 8], [16, 8]],
     ],
-    waves: 14, hpMult: 1.15, coins: 290, lives: 20, seed: 37, theme: LAGOON,
+    waves: 14, hpMult: 1.15, coins: 290, lives: 20, seed: 37, theme: LAGOON, challenge: { kind: 'noAbilities' },
   },
   {
     name: 'Riffspirale', subtitle: 'Sie kommen vom Meer und winden sich ins Inselinnere.',
     paths: [[[18, 1], [2, 1], [2, 8], [15, 8], [15, 4], [6, 4], [6, 6], [11, 6]]],
-    waves: 16, hpMult: 1.8, coins: 350, lives: 20, seed: 41, theme: REEF,
+    waves: 16, hpMult: 1.8, coins: 350, lives: 20, seed: 41, theme: REEF, challenge: { kind: 'maxTowers', n: 8 },
   },
   {
-    name: 'Sturmküste', subtitle: 'Die letzte Schlacht: Angriff von Norden und Süden.',
+    name: 'Sturmküste', subtitle: 'Sturmflut: Angriff von Norden und Süden.',
     paths: [
       [[2, -1], [2, 3], [8, 3], [8, 5], [13, 5], [13, 2], [16, 2]],
       [[5, 10], [5, 7], [8, 7], [8, 5], [13, 5], [13, 2], [16, 2]],
     ],
-    waves: 20, hpMult: 1.25, coins: 380, lives: 20, seed: 53, theme: STORM,
+    waves: 20, hpMult: 1.25, coins: 380, lives: 20, seed: 53, theme: STORM, challenge: { kind: 'ban', tower: 'spear' },
+  },
+  {
+    name: 'Quallenbucht', subtitle: 'In der warmen Bucht treiben Quallen an Land.',
+    paths: [[[-1, 8], [3, 8], [3, 2], [8, 2], [8, 7], [12, 7], [12, 1], [16, 1]]],
+    waves: 18, hpMult: 1.6, coins: 400, lives: 20, seed: 67, theme: BAY, challenge: { kind: 'noAbilities' },
+  },
+  {
+    name: 'Gewitterriff', subtitle: 'Zitteraale greifen von zwei Seiten an.',
+    paths: [
+      [[18, 7], [14, 7], [14, 4], [9, 4], [9, 8], [4, 8], [4, 3], [1, 3]],
+      [[6, -1], [6, 6], [9, 6], [9, 8], [4, 8], [4, 3], [1, 3]],
+    ],
+    waves: 20, hpMult: 1.7, coins: 420, lives: 20, seed: 79, theme: THUNDER, challenge: { kind: 'maxTowers', n: 10 },
   },
 ];

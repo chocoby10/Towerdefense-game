@@ -30,15 +30,16 @@ Auf dem Handy: Seite öffnen, im Browser-Menü „Zum Startbildschirm hinzufüge
 
 ## Inhalt
 
-- 5 Inseln (Level) mit 10–20 Wellen, Freischaltung nacheinander
-- Schwierigkeitsgrade Leicht/Normal/Schwer, je 1–3 Sterne (max. 45 Sterne)
+- 7 Inseln (Level) mit 10–20 Wellen, Freischaltung nacheinander
+- Schwierigkeitsgrade Leicht/Normal/Schwer, je 1–3 Sterne (max. 63 Sterne)
+- Herausforderung pro Insel (z. B. Turm-Limit, ohne Fähigkeiten) mit Abzeichen und 2 Shop-Sternen
 - Endlosmodus pro Insel mit Rekord (alle 10 Wellen ein Kraken)
 - Sterne-Shop mit dauerhaften Boni (Startkapital, Schaden, Reichweite, Abklingzeit, Leben, Verkaufswert)
 - 5 Türme mit je 3 Stufen: Schleuder, Muschelhorn (verlangsamt), Speer-Totem (durchschlägt Panzer), Feuerschale (Fläche + Brand), Sturmstein (Kettenblitz)
 - Spezialisierung auf Stufe 3: pro Turm zwei Zweige (z. B. Doppelschleuder oder Felsbrocken, Speerhagel oder Riesenspeer)
 - Aktive Fähigkeiten mit Abklingzeit: Vulkanbrocken (Flächenschaden an gewählter Stelle) und Flutwelle (spült Bodengegner zurück)
 - Kombo-Bonus für schnelle Mehrfach-Kills, Bildschirmwackeln, Betäubungs- und Treffereffekte
-- 7 Gegnertypen: Krabbe, Gecko, Pirat, Möwe (fliegt), Panzerschildkröte, Seeschamane (heilt), Kraken (Boss)
+- 10 Gegnertypen: Krabbe, Gecko, Pirat, Möwe (fliegt), Panzerschildkröte, Seeschamane (heilt), Qualle (teilt sich in Quällchen), Zitteraal (legt Türme lahm), Kraken (Boss)
 - Zielwahl pro Turm, Verbessern/Verkaufen, Wellenvorschau, Früh-Bonus, 1×/2×/3×-Tempo, Pause
 - Touch-Bedienung (Tippen = Vorschau, nochmal tippen = bauen), Maus und Tastatur
 - Pausiert automatisch, wenn die App in den Hintergrund geht

@@ -12,7 +12,7 @@ const r = await build({
 });
 const mem = new Map();
 globalThis.localStorage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) };
-const { Game, cleanRun, buildMods, TOWERS } = await import('data:text/javascript;base64,' + Buffer.from(r.outputFiles[0].text).toString('base64'));
+const { Game, Enemy, cleanRun, buildMods, TOWERS, ENEMIES, LEVELS } = await import('data:text/javascript;base64,' + Buffer.from(r.outputFiles[0].text).toString('base64'));
 
 const mods = buildMods(1, {});
 const test = (name, fn) => { fn(); console.log('✓', name); };
@@ -118,6 +118,67 @@ test('Türme auf dem Weg werden beim Fortsetzen übersprungen', () => {
   const k = [...g.pathTiles][3];
   const snap = cleanRun({ v: 1, level: 0, difficulty: 1, wave: 0, coins: 100, lives: 20, towers: [{ id: 'sling', c: k % 18, r: Math.floor(k / 18) }] });
   assert.equal(Game.restore(snap, mods).towers.length, 0);
+});
+
+const freeTiles = (g) => { const f = []; for (let rr = 0; rr < 10; rr++) for (let c = 0; c < 18; c++) if (g.canPlace(c, rr)) f.push([c, rr]); return f; };
+
+test('Qualle teilt sich beim Tod in zwei Quällchen', () => {
+  const g = new Game(5, { mods });
+  const e = new Enemy(1, ENEMIES.jelly, g.paths[0], 1);
+  e.dist = 300;
+  g.enemies.push(e);
+  g.hurt(e, 1e6, null, true);
+  const kids = g.enemies.filter((x) => x.alive && x.def.id === 'jellyling');
+  assert.equal(kids.length, 2);
+  assert.ok(kids.every((k) => Math.abs(k.dist - 300) <= 16));
+});
+
+test('Zitteraal legt Türme in der Nähe lahm, entfernte nicht', () => {
+  const g = new Game(6, { mods });
+  g.coins = 9999;
+  const f = freeTiles(g);
+  const e = new Enemy(1, ENEMIES.eel, g.paths[0], 1);
+  e.dist = 200;
+  const p = g.paths[0].at(200); e.x = p.x; e.y = p.y;
+  e.shockT = 0.01;
+  // nächster und weitester freier Platz zum Aal
+  const d2 = ([c, r]) => ((c + 0.5) * 64 - e.x) ** 2 + ((r + 0.5) * 64 - e.y) ** 2;
+  f.sort((a, b) => d2(a) - d2(b));
+  g.place('sling', ...f[0]);
+  g.place('sling', ...f[f.length - 1]);
+  g.enemies.push(e);
+  g.wave = 1;
+  g.update(1 / 30);
+  const near = g.towerAt(...f[0]), far = g.towerAt(...f[f.length - 1]);
+  assert.ok(near.disabledT > 0, 'naher Turm lahmgelegt');
+  assert.equal(far.disabledT, 0, 'ferner Turm unberührt');
+});
+
+test('Herausforderung: Turm-Limit wird eingehalten', () => {
+  const g = new Game(0, { mods, challenge: true });
+  assert.equal(LEVELS[0].challenge.kind, 'maxTowers');
+  g.coins = 99999;
+  const f = freeTiles(g);
+  let n = 0;
+  for (const t of f) if (g.place('sling', ...t)) n++;
+  assert.equal(n, LEVELS[0].challenge.n);
+});
+
+test('Herausforderung: verbotener Turm und keine Fähigkeiten', () => {
+  const g = new Game(1, { mods, challenge: true });
+  assert.equal(g.isUnlocked(LEVELS[1].challenge.tower), false);
+  g.coins = 9999;
+  assert.equal(g.place(LEVELS[1].challenge.tower, ...freeTiles(g)[0]), false);
+  const h = new Game(2, { mods, challenge: true });
+  h.wave = 1;
+  assert.equal(h.abilityReady('meteor'), false);
+  assert.equal(new Game(2, { mods }).abilityReady('meteor'), false, 'vor Welle 1 ohnehin nicht');
+});
+
+test('Herausforderung im Spielstand nur auf Normal gültig', () => {
+  assert.equal(cleanRun({ v: 1, level: 0, difficulty: 0, challenge: true }).challenge, false);
+  assert.equal(cleanRun({ v: 1, level: 0, difficulty: 1, endless: true, challenge: true }).challenge, false);
+  assert.equal(cleanRun({ v: 1, level: 0, difficulty: 1, challenge: true }).challenge, true);
 });
 
 console.log('Alle Spiellogik-Tests bestanden.');

@@ -413,6 +413,63 @@ function drawEnemy(ctx: Ctx, e: Enemy): void {
       ctx.fill();
       break;
     }
+    case 'jelly':
+    case 'jellyling': {
+      // durchscheinende Qualle mit pulsierendem Schirm und wehenden Tentakeln
+      const pulse = 1 + Math.sin(a * 5) * 0.08;
+      ctx.strokeStyle = 'rgba(255,150,210,0.7)';
+      ctx.lineWidth = e.def.id === 'jelly' ? 2.2 : 1.6;
+      ctx.lineCap = 'round';
+      const n = e.def.id === 'jelly' ? 5 : 3;
+      for (let i = 0; i < n; i++) {
+        const x0 = (i - (n - 1) / 2) * (s * 0.38);
+        ctx.beginPath();
+        ctx.moveTo(x0, 0);
+        ctx.quadraticCurveTo(x0 + Math.sin(a * 6 + i) * 4, s * 0.7, x0 + Math.sin(a * 6 + i + 1) * 5, s * 1.2);
+        ctx.stroke();
+      }
+      const jg = ctx.createRadialGradient(-s * 0.3, -s * 0.5, 1, 0, -s * 0.2, s * pulse);
+      jg.addColorStop(0, 'rgba(255,235,248,0.95)');
+      jg.addColorStop(0.6, 'rgba(255,150,210,0.8)');
+      jg.addColorStop(1, 'rgba(220,90,170,0.65)');
+      ctx.fillStyle = jg;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, s * pulse, s * 0.85 * pulse, 0, Math.PI, 0);
+      ctx.quadraticCurveTo(0, s * 0.35, -s * pulse, 0);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ellipse(ctx, -s * 0.35, -s * 0.45, s * 0.22, s * 0.12); ctx.fill();
+      ctx.fillStyle = '#5a1e4a';
+      circle(ctx, -s * 0.25, -s * 0.2, 1.6); ctx.fill();
+      circle(ctx, s * 0.25, -s * 0.2, 1.6); ctx.fill();
+      break;
+    }
+    case 'eel': {
+      // geschlängelter Körper aus Segmenten, gelb-dunkel gestreift, knistert
+      ctx.rotate(e.angle);
+      const segs = 9;
+      for (let i = segs - 1; i >= 0; i--) {
+        const x = -i * s * 0.32;
+        const y = Math.sin(a * 8 - i * 0.8) * (2 + i * 0.6);
+        const r = s * (0.55 - i * 0.035);
+        ctx.fillStyle = i % 2 ? '#3d3a22' : '#e6d14a';
+        circle(ctx, x, y, r); ctx.fill();
+      }
+      ctx.fillStyle = '#e6d14a';
+      ellipse(ctx, s * 0.25, 0, s * 0.62, s * 0.5); ctx.fill();
+      ctx.fillStyle = '#111';
+      circle(ctx, s * 0.5, -3.5, 1.8); ctx.fill();
+      circle(ctx, s * 0.5, 3.5, 1.8); ctx.fill();
+      if (Math.sin(a * 23) > 0.6) {
+        ctx.strokeStyle = 'rgba(255,250,170,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        const sx = -s * (0.3 + Math.random());
+        ctx.moveTo(sx, -s * 0.6); ctx.lineTo(sx + 3, -s); ctx.lineTo(sx - 2, -s * 1.3);
+        ctx.stroke();
+      }
+      break;
+    }
     case 'kraken': {
       const bob = Math.sin(a * 2) * 3;
       ctx.strokeStyle = '#6b2d85';
@@ -829,7 +886,23 @@ export class Renderer {
     // Bodengegner + Türme nach Y sortiert, damit sie sich korrekt überlappen
     const items: { y: number; draw: () => void }[] = [];
     for (const e of g.enemies) if (!e.def.flying) items.push({ y: e.y, draw: () => drawEnemy(ctx, e) });
-    for (const tw of g.towers) items.push({ y: tw.y + 8, draw: () => drawTower(ctx, tw.def.id, tw.level, tw.x, tw.y, tw.angle, t, tw.recoil, tw.branch) });
+    for (const tw of g.towers) items.push({ y: tw.y + 8, draw: () => {
+      drawTower(ctx, tw.def.id, tw.level, tw.x, tw.y, tw.angle, t, tw.recoil, tw.branch);
+      if (tw.disabledT > 0) {
+        // lahmgelegt: abgedunkelt mit Blitzsymbol
+        ctx.save();
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = '#1a2030';
+        ellipse(ctx, tw.x, tw.y + 2, 26, 17); ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffe66b';
+        ctx.beginPath();
+        const bx = tw.x, by = tw.y - 30;
+        ctx.moveTo(bx + 2, by - 9); ctx.lineTo(bx - 5, by + 1); ctx.lineTo(bx, by + 1); ctx.lineTo(bx - 2, by + 9); ctx.lineTo(bx + 5, by - 1); ctx.lineTo(bx, by - 1);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    } });
     items.sort((a, b) => a.y - b.y);
     for (const it of items) it.draw();
 

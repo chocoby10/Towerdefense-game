@@ -12,6 +12,8 @@ export interface Settings {
 export interface SaveData {
   /** Sterne pro Level-Index und Schwierigkeit [Leicht, Normal, Schwer] (0 = nicht geschafft) */
   stars: number[][];
+  /** Geschaffte Herausforderungen pro Insel */
+  badges: boolean[];
   /** Rekord im Endlosmodus (erreichte Welle) pro Level-Index */
   endless: number[];
   /** Gekaufte Shop-Stufen */
@@ -22,7 +24,7 @@ export interface SaveData {
 const KEY = 'inselwaechter.save.v2';
 const OLD_KEY = 'inselwaechter.save.v1';
 
-const defaults = (): SaveData => ({ stars: [], endless: [], perks: {}, settings: { sound: true, music: true } });
+const defaults = (): SaveData => ({ stars: [], badges: [], endless: [], perks: {}, settings: { sound: true, music: true } });
 
 /** Ganze Zahl im Bereich [0, max]; alles andere (Text, NaN, negativ, riesig) wird zu einem gültigen Wert. */
 const int = (v: unknown, max: number) => {
@@ -67,11 +69,12 @@ export function load(): SaveData {
         const res: SaveData = {
           stars: cleanStars(d.stars),
           endless: Array.isArray(d.endless) ? d.endless.slice(0, LEVELS.length).map((n) => int(n, MAX_ENDLESS)) : [],
+          badges: Array.isArray(d.badges) ? d.badges.slice(0, LEVELS.length).map((b) => b === true) : [],
           perks: cleanPerks(d.perks),
           settings: cleanSettings(d.settings),
         };
         // Mehr Boni gekauft als Sterne vorhanden (z. B. manipuliert) -> Boni zurücksetzen
-        if (perkSpent(res.perks) > totalStars(res)) res.perks = {};
+        if (perkSpent(res.perks) > shopStars(res)) res.perks = {};
         return res;
       }
     }
@@ -110,6 +113,14 @@ export function totalStars(d: SaveData): number {
   return d.stars.reduce((a, r) => a + r.reduce((x, y) => x + y, 0), 0);
 }
 
+/** Sterne pro geschaffter Herausforderung im Shop */
+export const BADGE_STARS = 2;
+
+/** Für den Shop verfügbare Sterne insgesamt: Sterne + Abzeichen-Bonus */
+export function shopStars(d: SaveData): number {
+  return totalStars(d) + d.badges.filter(Boolean).length * BADGE_STARS;
+}
+
 // ======================= Laufende Partie =======================
 
 const RUN_KEY = 'inselwaechter.run.v1';
@@ -124,6 +135,8 @@ export function cleanRun(v: unknown): RunSnapshot | null {
   if (Number(s.level) !== level) return null;
   const difficulty = int(s.difficulty, 2) as Difficulty;
   const endless = s.endless === true;
+  // Herausforderung nur im normalen Modus auf Normal
+  const challenge = s.challenge === true && !endless && difficulty === 1;
   const towers: RunSnapshot['towers'] = [];
   const used = new Set<string>();
   if (Array.isArray(s.towers)) {
@@ -148,6 +161,7 @@ export function cleanRun(v: unknown): RunSnapshot | null {
     level,
     difficulty,
     endless,
+    challenge,
     coins: int(s.coins, MAX_COINS),
     lives: Math.max(1, int(s.lives, 100)),
     wave: int(s.wave, endless ? MAX_ENDLESS : LEVELS[level].waves),

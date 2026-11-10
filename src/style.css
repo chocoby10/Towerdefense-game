@@ -601,3 +601,8 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif; }
   .modal-card.level-menu .diff-btn { padding: 8px 12px; font-size: 14px; }
   .modal-card.level-menu .hint { font-size: 11px; margin-top: 6px; }
 }
+.level-card .badge { font-size: 14px; }
+#hud-limit[hidden] { display: none; }
+
+/* Ausgeblendete Elemente bleiben immer ausgeblendet, egal welche display-Regel sonst greift */
+[hidden] { display: none !important; }

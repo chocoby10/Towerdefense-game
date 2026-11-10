@@ -45,4 +45,17 @@ run('Alter Spielstand v1 wird übernommen', { stars: [3, 2], settings: { music: 
   assert.deepEqual(d.stars, [[0, 3, 0], [0, 2, 0]]);
   assert.equal(d.settings.music, false);
 }, 'inselwaechter.save.v1');
+run('Abzeichen nur als true/false, begrenzt auf Inselzahl', { stars: [[3, 3, 3]], badges: [true, 'ja', 1, null, true, true, true, true, true, true] }, (d) => {
+  assert.equal(d.badges[0], true);
+  assert.equal(d.badges[1], false);
+  assert.equal(d.badges[2], false);
+  assert.ok(d.badges.length <= 7);
+});
+run('Abzeichen zählen für Shop-Sterne', { stars: [[1, 0, 0]], badges: [true], perks: { coins: 2 } }, (d) => {
+  // 1 Stern + 2 Abzeichen-Sterne = 3 -> coins Stufe 2 kostet 2+3=5 -> zu teuer -> zurückgesetzt
+  assert.deepEqual(d.perks, {});
+});
+run('Abzeichen ermöglichen Käufe', { stars: [[3, 0, 0]], badges: [true], perks: { coins: 2 } }, (d) => {
+  assert.equal(d.perks.coins, 2);
+});
 console.log('Alle Speicherstand-Tests bestanden.');

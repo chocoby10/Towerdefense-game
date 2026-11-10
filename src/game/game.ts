@@ -1,5 +1,6 @@
 import { COLS, ROWS, TILE, WAVE_DELAY, EARLY_BONUS_PER_SEC } from './config';
 import { DEFAULT_MODS, type Difficulty, type Mods } from './meta';
+import type { Challenge } from './data';
 import {
   ABILITIES, ENEMIES, LEVELS, TOWERS,
   type AbilityId, type EnemyDef, type EnemyId, type LevelDef, type TargetMode, type Tile, type TowerDef, type TowerId, type TowerLevel,
@@ -50,6 +51,8 @@ export class Enemy {
   burnT = 0;
   burnSrc: Tower | null = null;
   healT = 1;
+  /** Zeit bis zum nächsten Stromschlag (Zitteraal) */
+  shockT = 2;
   alive = true;
   hitFlash = 0;
   anim = Math.random() * 10;
@@ -77,6 +80,8 @@ export class Tower {
   kills = 0;
   dealt = 0;
   recoil = 0;
+  /** Sekunden, die der Turm noch lahmgelegt ist (Zitteraal) */
+  disabledT = 0;
   readonly x: number;
   readonly y: number;
 
@@ -148,6 +153,7 @@ export interface RunSnapshot {
   level: number;
   difficulty: Difficulty;
   endless: boolean;
+  challenge: boolean;
   coins: number;
   lives: number;
   /** Anzahl bereits gestarteter Wellen */
@@ -233,11 +239,14 @@ export class Game {
   readonly endless: boolean;
   readonly difficulty: Difficulty;
   readonly mods: Mods;
+  /** Aktive Herausforderung (nur auf Normal) */
+  readonly challenge: Challenge | null;
 
-  constructor(readonly levelIndex: number, opts: { difficulty?: Difficulty; endless?: boolean; mods?: Mods } = {}) {
+  constructor(readonly levelIndex: number, opts: { difficulty?: Difficulty; endless?: boolean; mods?: Mods; challenge?: boolean } = {}) {
     this.endless = opts.endless ?? false;
     this.difficulty = opts.difficulty ?? 1;
     this.mods = opts.mods ?? DEFAULT_MODS;
+    this.challenge = opts.challenge ? LEVELS[levelIndex].challenge : null;
     this.level = LEVELS[levelIndex];
     this.paths = this.level.paths.map((p) => new Path(p));
     this.coins = Math.round(this.level.coins * this.mods.coinsMult) + this.mods.coinsBonus;
@@ -284,6 +293,7 @@ export class Game {
       level: this.levelIndex,
       difficulty: this.difficulty,
       endless: this.endless,
+      challenge: this.challenge !== null,
       coins: this.coins,
       lives: this.lives,
       wave: this.wave,
@@ -296,7 +306,7 @@ export class Game {
 
   /** Stellt eine Partie wieder her. Ungültige Türme (z. B. auf dem Weg) werden übersprungen. */
   static restore(s: RunSnapshot, mods: Mods): Game {
-    const g = new Game(s.level, { difficulty: s.difficulty, endless: s.endless, mods });
+    const g = new Game(s.level, { difficulty: s.difficulty, endless: s.endless, challenge: s.challenge, mods });
     g.coins = s.coins;
     g.lives = Math.min(s.lives, g.maxLives);
     g.wave = Math.min(s.wave, g.totalWaves - 1);
@@ -344,10 +354,19 @@ export class Game {
   abilityMax(id: AbilityId): number { return ABILITIES[id].cooldown * this.mods.cooldown; }
 
   abilityReady(id: AbilityId): boolean {
+    if (this.challenge?.kind === 'noAbilities') return false;
     return this.state === 'playing' && this.wave > 0 && this.cooldowns[id] <= 0;
   }
 
-  isUnlocked(id: TowerId): boolean { return TOWERS[id].unlock <= this.levelIndex; }
+  isUnlocked(id: TowerId): boolean { return TOWERS[id].unlock <= this.levelIndex && !this.isBanned(id); }
+
+  /** Durch die Herausforderung verboten? */
+  isBanned(id: TowerId): boolean { return this.challenge?.kind === 'ban' && this.challenge.tower === id; }
+
+  /** Wie viele Türme dürfen noch gebaut werden (Herausforderung), sonst Infinity */
+  towersLeft(): number {
+    return this.challenge?.kind === 'maxTowers' ? Math.max(0, this.challenge.n - this.towers.length) : Infinity;
+  }
 
   spawningDone(): boolean { return this.spawners.every((s) => s.spawned >= s.g.count); }
 
@@ -386,6 +405,11 @@ export class Game {
   place(id: TowerId, c: number, r: number): boolean {
     const def = TOWERS[id];
     if (!this.isUnlocked(id) || !this.canPlace(c, r) || this.coins < def.cost) {
+      this.sfx('error');
+      return false;
+    }
+    if (this.towersLeft() <= 0) {
+      this.events.push({ type: 'toast', title: 'Herausforderung', text: 'Turm-Limit erreicht. Verbessere oder verkaufe vorhandene Türme.' });
       this.sfx('error');
       return false;
     }
@@ -600,6 +624,24 @@ export class Game {
       if (!e.alive) return;
       if (Math.random() < dt * 12) this.particle(e.x + (Math.random() - 0.5) * e.def.size, e.y - 4, Math.random() < 0.5 ? '#ff8a2a' : '#ffd34d', 30, 3, 0.5, -60);
     }
+    if (e.def.shock) {
+      e.shockT -= dt;
+      if (e.shockT <= 0) {
+        const sh = e.def.shock;
+        e.shockT = sh.every;
+        let hit = false;
+        for (const t of this.towers) {
+          if ((t.x - e.x) ** 2 + (t.y - e.y) ** 2 > sh.radius ** 2) continue;
+          t.disabledT = Math.max(t.disabledT, sh.duration);
+          this.fx.push({ k: 'bolt', pts: [{ x: e.x, y: e.y }, { x: t.x, y: t.y - 10 }], life: 0.3, max: 0.3 });
+          hit = true;
+        }
+        if (hit) {
+          this.ring(e.x, e.y, 10, sh.radius, 'rgba(255,240,120,0.8)', 0.4, 4);
+          this.sfx('zap');
+        }
+      }
+    }
     if (e.def.heal) {
       e.healT -= dt;
       if (e.healT <= 0) {
@@ -676,6 +718,11 @@ export class Game {
   private updateTower(t: Tower, dt: number): void {
     t.cd -= dt;
     t.recoil = Math.max(0, t.recoil - dt * 4);
+    if (t.disabledT > 0) {
+      t.disabledT -= dt;
+      if (Math.random() < dt * 8) this.particle(t.x + (Math.random() - 0.5) * 30, t.y - 10, '#fff3a0', 50, 2, 0.3, 0);
+      return;
+    }
     const target = this.findTarget(t);
     if (!target) return;
     const want = Math.atan2(target.y - t.y, target.x - t.x);
@@ -803,6 +850,22 @@ export class Game {
 
   private kill(e: Enemy, src: Tower | null): void {
     e.alive = false;
+    if (e.def.split) {
+      // Teilt sich: Nachkommen erben die Stärke der Welle
+      const scale = e.maxHp / e.def.hp;
+      for (let i = 0; i < e.def.split.count; i++) {
+        const child = new Enemy(this.nextId++, ENEMIES[e.def.split.type], e.path, scale);
+        child.dist = Math.max(0, e.dist + (i - (e.def.split.count - 1) / 2) * 16);
+        const p = e.path.at(child.dist);
+        child.x = p.x; child.y = p.y; child.angle = p.angle;
+        this.enemies.push(child);
+      }
+      if (!this.seen.has(e.def.split.type)) {
+        this.seen.add(e.def.split.type);
+        const d = ENEMIES[e.def.split.type];
+        this.events.push({ type: 'toast', title: `Neu: ${d.name}`, text: d.hint });
+      }
+    }
     this.coins += e.def.reward;
     this.kills++;
     if (src) src.kills++;
@@ -863,4 +926,7 @@ export const ENEMY_COLORS: Record<EnemyId, string> = {
   turtle: '#4f7a3a',
   shaman: '#7b4fb0',
   kraken: '#8a3fa8',
+  jelly: '#ff9ad5',
+  jellyling: '#ffc2e6',
+  eel: '#e6d14a',
 };
