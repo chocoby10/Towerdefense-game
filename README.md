@@ -38,6 +38,8 @@ Auf dem Handy: Seite öffnen, im Browser-Menü „Zum Startbildschirm hinzufüge
 - Pausiert automatisch, wenn die App in den Hintergrund geht
 - Fortschritt und Einstellungen werden lokal gespeichert
 
+Vollbild: Auf Handys wechselt das Spiel beim Tippen auf „Spielen“ automatisch in den Vollbildmodus; zusätzlich gibt es den ⛶-Knopf oben rechts (nicht auf iPhones – dort „Zum Home-Bildschirm“ nutzen).
+
 Tastatur: `1`–`5` Turm · `Leertaste` Welle · `P` Pause · `F` Tempo · `U` Verbessern · `S` Verkaufen · `Esc` Abbrechen · `Shift`+Klick baut mehrere Türme hintereinander
 
 ## Balance-Test
